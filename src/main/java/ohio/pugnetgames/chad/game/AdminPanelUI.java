@@ -4,8 +4,12 @@ import ohio.pugnetgames.chad.game.GameObject.ShapeType;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.datatransfer.StringSelection; // NEW IMPORT
-import java.awt.Toolkit; // NEW IMPORT
+import java.awt.datatransfer.StringSelection;
+import java.awt.Toolkit;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 /**
  * AdminPanelUI is a separate Swing window used to control game cheats and settings
@@ -55,20 +59,30 @@ public class AdminPanelUI extends JFrame {
         mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
 
         // Shape Selector
-        shapeSelector = new JComboBox<>(new String[]{"CUBE", "SPHERE", "TABLE", "KEY"});
+        shapeSelector = new JComboBox<>(new String[]{"CUBE", "SPHERE", "TABLE", "KEY", "BED"});
         shapeSelector.setMaximumSize(new Dimension(200, 30));
         shapeSelector.setAlignmentX(Component.CENTER_ALIGNMENT);
         mainPanel.add(new JLabel("Shape:"));
         mainPanel.add(shapeSelector);
         mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
 
-        // Texture Selector
-        textureSelector = new JComboBox<>(new String[]{"WALL (Tunnel)", "ORB (Grass)", "NONE (Color)"});
+        // 💥 MODIFIED: Dynamic Texture Selector 💥
+        // 1. Get all loaded texture names
+        Map<String, Integer> textures = gamePanel.getLoadedTextures();
+        List<String> textureNames = new ArrayList<>(textures.keySet());
+        Collections.sort(textureNames); // Sort alphabetically
+
+        // 2. Add the "NONE" (Color) option at the top
+        textureNames.add(0, "NONE (Color)");
+
+        // 3. Create the JComboBox
+        textureSelector = new JComboBox<>(textureNames.toArray(new String[0]));
         textureSelector.setMaximumSize(new Dimension(200, 30));
         textureSelector.setAlignmentX(Component.CENTER_ALIGNMENT);
         mainPanel.add(new JLabel("Texture:"));
         mainPanel.add(textureSelector);
         mainPanel.add(Box.createRigidArea(new Dimension(0, 10)));
+        // 💥 END MODIFIED 💥
 
         // Spawn Button
         JButton spawnButton = createStyledButton("SPAWN at Player", new Color(255, 165, 0));
@@ -174,14 +188,17 @@ public class AdminPanelUI extends JFrame {
      */
     private void spawnObject() {
         String selectedShape = (String) shapeSelector.getSelectedItem();
-        String selectedTexture = (String) textureSelector.getSelectedItem();
+        String selectedTextureName = (String) textureSelector.getSelectedItem();
 
         int textureId = 0;
-        if (selectedTexture.startsWith("WALL")) {
-            textureId = gamePanel.getWallTextureID();
-        } else if (selectedTexture.startsWith("ORB")) {
-            textureId = gamePanel.getOrbTextureID();
+
+        // 💥 MODIFIED: Use the new utility method in GamePanel 💥
+        if (selectedTextureName != null && !selectedTextureName.equals("NONE (Color)")) {
+            // Get the ID from the map in GamePanel
+            textureId = gamePanel.getTextureIDByName(selectedTextureName);
         }
+        // --- 💥 END MODIFIED 💥 ---
+
         gamePanel.addObjectAtPlayerPosition(selectedShape, textureId);
     }
 

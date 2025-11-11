@@ -8,20 +8,34 @@ import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
-// NEW: Imports for file handling
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List; // 💥 NEW IMPORT 💥
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.system.MemoryStack.stackPush;
-import static org.lwjgl.system.MemoryUtil.NULL;
 
 /**
  * Utility class to load image files from resources using STB Image and create
  * an OpenGL texture ID.
  */
 public class TextureLoader {
+
+    // 💥 NEW: Centralized list of texture filenames (Simulated scan) 💥
+    private static final List<String> TEXTURE_FILENAMES = List.of(
+            "orb_texture.png",
+            "tunnel_texture.png",
+            "wood_texture.png",
+            "sheets_texture.png"
+    );
+
+    /**
+     * 💥 NEW: Getter for the list of texture file names. 💥
+     */
+    public static List<String> getAllTextureFilenames() {
+        return TEXTURE_FILENAMES;
+    }
 
     /**
      * Loads a texture from the resources folder.
@@ -39,25 +53,25 @@ public class TextureLoader {
             return 0;
         }
 
-        int width, height, comp;
+        int width, height;
         ByteBuffer imageData;
 
         // Use MemoryStack for temporary buffers
         try (var stack = stackPush()) {
             IntBuffer w = stack.mallocInt(1);
             IntBuffer h = stack.mallocInt(1);
-            IntBuffer c = stack.mallocInt(1);
+            stack.mallocInt(1); // Placeholder for components, we force 4
 
             // Decode the image
-            imageData = STBImage.stbi_load_from_memory(imageBuffer, w, h, c, 4); // Force 4 channels (RGBA)
+            // Note: We ignore the actual number of components and force 4 channels (RGBA)
+            imageData = STBImage.stbi_load_from_memory(imageBuffer, w, h, stack.mallocInt(1), 4);
             if (imageData == null) {
-                System.err.println("Failed to load texture data: " + STBImage.stbi_failure_reason());
+                System.err.println("Failed to load texture data for " + fileName + ": " + STBImage.stbi_failure_reason());
                 return 0;
             }
 
             width = w.get(0);
             height = h.get(0);
-            comp = c.get(0);
 
             // Create OpenGL Texture
             int textureID = glGenTextures();
@@ -81,7 +95,6 @@ public class TextureLoader {
 
     /**
      * Utility to load a resource file into a ByteBuffer.
-     * MODIFIED: Copied from FontRenderer to robustly handle JAR paths.
      */
     private static ByteBuffer loadResource(String resource, int bufferSize) throws IOException {
         ByteBuffer buffer;

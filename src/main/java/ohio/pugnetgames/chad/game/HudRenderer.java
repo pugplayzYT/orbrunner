@@ -8,10 +8,19 @@ import ohio.pugnetgames.chad.game.Room.RoomType;
 /**
  * Handles rendering all 2D overlay text (HUD).
  * NEW: Now renders objectives and dynamic messages.
+ * MODIFIED: Now renders room floors on the minimap based explicitly on RoomType,
+ * instead of checking floor object textures.
  */
 public class HudRenderer {
 
     private FontRenderer fontRenderer;
+
+    // --- 💥 NEW: Color Definitions for Room Types (RGB) 💥 ---
+    private final float[] STANDARD_COLOR = {0.5f, 0.5f, 0.5f}; // Grey
+    private final float[] COURTYARD_COLOR = {0.0f, 0.3f, 0.0f}; // Dark Green
+    private final float[] BEDROOM_COLOR = {0.55f, 0.27f, 0.07f}; // Chocolate Brown
+    private final float[] TUNNEL_COLOR = {0.4f, 0.4f, 0.4f}; // Slightly darker grey for tunnels
+    // --- 💥 END NEW 💥 ---
 
     public void init() {
         fontRenderer = new FontRenderer();
@@ -136,7 +145,23 @@ public class HudRenderer {
         // --- 💥 END NEW 💥 ---
     }
 
-    // --- 💥 MODIFIED METHOD: renderMiniMap (Removed Keys/Exit Logic) 💥 ---
+    /**
+     * --- NEW: Helper method to map RoomType to its minimap color ---
+     */
+    private float[] getColorForRoomType(Room.RoomType type) {
+        switch (type) {
+            case STANDARD:
+                return STANDARD_COLOR;
+            case COURTYARD:
+                return COURTYARD_COLOR;
+            case BEDROOM:
+                return BEDROOM_COLOR;
+            default:
+                return STANDARD_COLOR;
+        }
+    }
+
+
     /**
      * Renders a 2D representation of the maze by drawing scaled quads for
      * each major structural GameObject (walls and floors).
@@ -194,18 +219,94 @@ public class HudRenderer {
         glVertex2f(mapX_Screen, mapY_Screen + mapSize);
         glEnd();
 
-        // 1. Draw World Geometry (Quads for floors and walls)
-        // !!!!!!!!!!!!!! THE FIX !!!!!!!!!!!!!!
-        // We must lock the list we are iterating over to prevent a crash
-        // if the admin panel adds an object at the same time.
+        // 1. 💥 DRAW TUNNEL FLOORS FIRST (Layer 1 - Bottom) 💥
+        // This draws the generic grey tunnels, which will be covered by the room quads.
+        glBegin(GL_QUADS);
+        float[] tunnelColor = TUNNEL_COLOR;
+        glColor3f(tunnelColor[0], tunnelColor[1], tunnelColor[2]);
+
         synchronized (world.getStaticObjects()) {
             for (GameObject obj : world.getStaticObjects()) {
-                // Only draw major structural elements
+                ShapeType shape = obj.getShape();
+
+                // A Tunnel floor is a CUBE with low Y-scale AND the wallTextureID
+                boolean isTunnelFloor = (shape == ShapeType.CUBE && obj.getScaleY() <= 0.5f && obj.getTextureID() == world.getWallTextureID());
+
+                if (isTunnelFloor) {
+                    // Calculate Bounding Box of Object in World Space
+                    float oMinX_World = obj.getPosX() - obj.getScaleX() / 2.0f;
+                    float oMaxX_World = obj.getPosX() + obj.getScaleX() / 2.0f;
+                    float oMinZ_World = obj.getPosZ() - obj.getScaleZ() / 2.0f;
+                    float oMaxZ_World = obj.getPosZ() + obj.getScaleZ() / 2.0f;
+
+                    // Convert to Screen Space
+                    float oMinX_Screen = mapX_Screen + (oMinX_World - wMinX) * mapRatio;
+                    float oMaxX_Screen = mapX_Screen + (oMaxX_World - wMinX) * mapRatio;
+                    float oMinZ_Screen = mapY_Screen + (oMinZ_World - wMinZ) * mapRatio; // Z maps to screen Y
+                    float oMaxZ_Screen = mapY_Screen + (oMaxZ_World - wMinZ) * mapRatio;
+
+                    // Draw Quad
+                    glVertex2f(oMinX_Screen, oMinZ_Screen);
+                    glVertex2f(oMaxX_Screen, oMinZ_Screen);
+                    glVertex2f(oMaxX_Screen, oMaxZ_Screen);
+                    glVertex2f(oMinX_Screen, oMaxZ_Screen);
+                }
+            }
+        }
+        glEnd();
+
+
+        // 2. 💥 DRAW ROOM FLOORS LAST (Layer 2 - Middle/Top) 💥
+        // This overwrites the tunnel color where rooms are defined.
+        glBegin(GL_QUADS);
+        // Iterate over all rooms
+        for (Room room : world.getAllRooms()) {
+            float[] color = getColorForRoomType(room.getType());
+            glColor3f(color[0], color[1], color[2]);
+
+            // Calculate Bounding Box of Room in World Space
+            float oMinX_World = room.minX;
+            float oMaxX_World = room.maxX;
+            float oMinZ_World = room.minZ;
+            float oMaxZ_World = room.maxZ;
+
+            // Convert to Screen Space
+            float oMinX_Screen = mapX_Screen + (oMinX_World - wMinX) * mapRatio;
+            float oMaxX_Screen = mapX_Screen + (oMaxX_World - wMinX) * mapRatio;
+            float oMinZ_Screen = mapY_Screen + (oMinZ_World - wMinZ) * mapRatio; // Z maps to screen Y
+            float oMaxZ_Screen = mapY_Screen + (oMaxZ_World - wMinZ) * mapRatio;
+
+            // Draw Quad
+            glVertex2f(oMinX_Screen, oMinZ_Screen);
+            glVertex2f(oMaxX_Screen, oMinZ_Screen);
+            glVertex2f(oMaxX_Screen, oMaxZ_Screen);
+            glVertex2f(oMinX_Screen, oMaxZ_Screen);
+        }
+        glEnd();
+
+
+        // 3. Draw World Geometry (Walls and Furniture - Layer 3 - Top)
+        synchronized (world.getStaticObjects()) {
+            for (GameObject obj : world.getStaticObjects()) {
+                // Only draw structural elements that should block the view (walls, tables, beds)
                 ShapeType shape = obj.getShape();
                 if (shape != ShapeType.CUBE && shape != ShapeType.PLANE) continue;
 
-                // Only consider floor objects (low Y-scale) and tall objects (walls)
-                boolean isFloor = shape == ShapeType.PLANE || obj.getScaleY() <= 0.5f;
+                // --- Determine if object is a Wall/Obstacle or a Floor (to skip it) ---
+                boolean isFloor = (shape == ShapeType.PLANE) || // Skip Plane floors (already drawn by room loop)
+                        (shape == ShapeType.CUBE && obj.getScaleY() <= 0.5f); // Skip low CUBE floors (already drawn by tunnel loop)
+
+                if (isFloor) continue; // Skip all floor objects
+
+                // --- Walls/Obstacles logic ---
+                // If it's collidable AND tall, it's a wall or furniture
+                // We use sheetsTextureID to skip the mattress which is floor height
+                if (!obj.isCollidable() || obj.getScaleY() > 5.0f || obj.getTextureID() == world.getSheetsTextureID()) {
+                    continue; // Skip invisible walls, triggers, and mattresses (sheets)
+                }
+
+                // Wall/Obstacle Color (Red)
+                glColor3f(0.8f, 0.1f, 0.1f);
 
                 // --- Calculate Bounding Box of Object in World Space ---
                 float oMinX_World = obj.getPosX() - obj.getScaleX() / 2.0f;
@@ -214,27 +315,10 @@ public class HudRenderer {
                 float oMaxZ_World = obj.getPosZ() + obj.getScaleZ() / 2.0f;
 
                 // --- Convert to Screen Space ---
-                // x_screen = mapX_Screen + (x_world - wMinX) * mapRatio
                 float oMinX_Screen = mapX_Screen + (oMinX_World - wMinX) * mapRatio;
                 float oMaxX_Screen = mapX_Screen + (oMaxX_World - wMinX) * mapRatio;
                 float oMinZ_Screen = mapY_Screen + (oMinZ_World - wMinZ) * mapRatio; // Z maps to screen Y
                 float oMaxZ_Screen = mapY_Screen + (oMaxZ_World - wMinZ) * mapRatio;
-
-                // Set Color
-                if (isFloor) {
-                    // Courtyard floors (orb/grass texture)
-                    if (obj.getTextureID() == world.getOrbTextureID()) {
-                        glColor3f(0.0f, 0.3f, 0.0f); // Dark Green
-                    } else {
-                        glColor3f(0.5f, 0.5f, 0.5f); // Tunnel/Room floor (Gray)
-                    }
-                } else {
-                    // Walls/Tables (Collidable, tall objects)
-                    if (!obj.isCollidable() || obj.getScaleY() > 5.0f) {
-                        continue; // Skip invisible walls/triggers
-                    }
-                    glColor3f(0.8f, 0.1f, 0.1f); // Walls (Red)
-                }
 
                 // Draw Quad
                 glBegin(GL_QUADS);
@@ -244,34 +328,7 @@ public class HudRenderer {
                 glVertex2f(oMinX_Screen, oMaxZ_Screen);
                 glEnd();
             }
-        } // !!!!!!!!!!!!!! END OF THE FIX (close synchronized block) !!!!!!!!!!!!!!
-
-        // 💥 REMOVED: 2. Draw Key Locations (Yellow Circles/Points)
-        /*
-        glPointSize(KEY_SIZE);
-        glBegin(GL_POINTS);
-        for (Key key : keyManager.getKeys()) {
-            if (!key.collected) {
-                float kX_Screen = mapX_Screen + (key.x - wMinX) * mapRatio;
-                float kZ_Screen = mapY_Screen + (key.z - wMinZ) * mapRatio;
-
-                glColor3f(1.0f, 1.0f, 0.0f); // Yellow
-                glVertex2f(kX_Screen, kZ_Screen);
-            }
         }
-        */
-
-        // 💥 REMOVED: 3. Draw Win Trigger Location (Bright Green Circle/Point)
-        /*
-        if (winTrigger != null && keyManager.getKeysCollected() == keyManager.getTotalKeys()) {
-             glPointSize(WIN_SIZE);
-             float wX_Screen = mapX_Screen + (winTrigger.getPosX() - wMinX) * mapRatio;
-             float wZ_Screen = mapY_Screen + (winTrigger.getPosZ() - wMinZ) * mapRatio;
-
-             glColor3f(0.0f, 1.0f, 0.0f); // Bright Green
-             glVertex2f(wX_Screen, wZ_Screen);
-        }
-        */
 
         // 4. Draw Player Location (Red Circle/Point)
         glPointSize(PLAYER_SIZE);

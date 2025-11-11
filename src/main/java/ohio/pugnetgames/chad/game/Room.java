@@ -6,12 +6,13 @@ import java.util.List;
 /**
  * A data class that represents a single generated room.
  * It stores its boundaries and which walls have tunnels.
+ * MODIFIED: Now stores a list of key spawn locations (for tables).
  */
 public class Room {
 
-    /** NEW: Different types of rooms for different generation rules/visuals. */
+    /** MODIFIED: Added BEDROOM type. */
     public enum RoomType {
-        STANDARD, COURTYARD
+        STANDARD, COURTYARD, BEDROOM
     }
 
     // The boundaries of the room
@@ -25,6 +26,11 @@ public class Room {
 
     // NEW: Room type
     private final RoomType type;
+
+    // --- 💥 NEW: A list to store potential key spawn points (e.g., tables) ---
+    // Stores float arrays of [x, y, z]
+    public List<float[]> keySpawnLocations = new ArrayList<>();
+    // --- 💥 END NEW 💥 ---
 
     public Room(float minX, float minZ, float maxX, float maxZ) {
         this(minX, minZ, maxX, maxZ, RoomType.STANDARD);

@@ -11,6 +11,9 @@ import ohio.pugnetgames.chad.game.Room.RoomType;
 // --- 💥FIX: Use our OWN PathNode class ---
 import ohio.pugnetgames.chad.game.PathNode;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap; // 💥 NEW IMPORTS 💥
+import java.util.Collections; // 💥 NEW IMPORTS 💥
 // --- 💥END FIX ---
 
 import org.lwjgl.glfw.Callbacks;
@@ -37,6 +40,8 @@ import static org.lwjgl.system.MemoryUtil.NULL;
  * NEW: Added Objectives & Hot/Cold System.
  *
  * MODIFIED: Now accepts a Difficulty setting.
+ * MODIFIED: Now loads and passes bedroom textures.
+ * 💥 MODIFIED: Now manages a dynamic map of all loaded textures.
  */
 public class GamePanel extends Thread {
 
@@ -95,8 +100,14 @@ public class GamePanel extends Thread {
     // --- 💥END FIX ---
 
     // --- Textures ---
+    // 💥 MODIFIED: Now class fields only hold the "default" texture IDs needed for World gen 💥
     private int orbTextureID;
     private int wallTextureID;
+    private int woodTextureID;
+    private int sheetsTextureID;
+    // 💥 NEW: Map to hold all loaded textures (Name -> ID) 💥
+    private Map<String, Integer> loadedTextures = new HashMap<>();
+
 
     // --- Game State ---
     private final float FIELD_OF_VIEW = 60.0f;
@@ -145,9 +156,9 @@ public class GamePanel extends Thread {
         }
         // --- END NEW ---
 
-        if (adminPanelFeatureAvailable) {
-            SwingUtilities.invokeLater(() -> adminPanelUI = new AdminPanelUI(this));
-        }
+        // We initialize AdminPanelUI LATER, after textures are loaded,
+        // but BEFORE GLFW is initialized.
+
         GLFWErrorCallback.createPrint(System.err).set();
         if (!glfwInit()) {
             System.err.println("FATAL: Unable to initialize GLFW.");
@@ -175,8 +186,29 @@ public class GamePanel extends Thread {
         glfwSwapInterval(1);
         glfwShowWindow(window);
         GL.createCapabilities();
-        orbTextureID = TextureLoader.loadTexture("orb_texture.png");
-        wallTextureID = TextureLoader.loadTexture("tunnel_texture.png");
+
+        // --- 💥 MODIFIED: Load all textures and populate the map NOW (on game thread) 💥 ---
+        // This MUST run before AdminPanelUI is created so the texture list is full.
+        List<String> textureNames = TextureLoader.getAllTextureFilenames();
+        for (String name : textureNames) {
+            int id = TextureLoader.loadTexture(name);
+            if (id != 0) {
+                loadedTextures.put(name, id);
+            }
+        }
+
+        // Assign specific IDs to class fields for easy access by WorldLoader
+        orbTextureID = loadedTextures.getOrDefault("orb_texture.png", 0);
+        wallTextureID = loadedTextures.getOrDefault("tunnel_texture.png", 0);
+        woodTextureID = loadedTextures.getOrDefault("wood_texture.png", 0);
+        sheetsTextureID = loadedTextures.getOrDefault("sheets_texture.png", 0);
+        // --- 💥 END MODIFIED TEXTURE LOAD 💥 ---
+
+        // 💥 FIX: Initialize AdminPanelUI AFTER textures are loaded, but still on EDT 💥
+        if (adminPanelFeatureAvailable) {
+            SwingUtilities.invokeLater(() -> adminPanelUI = new AdminPanelUI(this));
+        }
+
         worldLoader = new WorldLoader();
         // --- Init Game Systems (World gen is now in startGame) ---
         player = new Player(0, 1.5f, 0);
@@ -209,9 +241,6 @@ public class GamePanel extends Thread {
         // Global ambient light (the "minimum" light everywhere)
         float[] globalAmbient = {0.8f, 0.8f, 0.8f, 1.0f}; // Bright, uniform light
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT, globalAmbient);
-
-        // --- 💥 FLASHLIGHT REMOVAL: Deleted all GL_LIGHT0 properties (ambient, diffuse, attenuation, etc.) ---
-
 
         // --- 💥 FOG: Keep the fog enabled ---
         glEnable(GL_FOG);
@@ -295,7 +324,8 @@ public class GamePanel extends Thread {
         bestScoreCache = ScoreManager.loadBestScore();
 
         // --- World Gen ---
-        world = worldLoader.generateWorld(wallTextureID, orbTextureID);
+        // --- MODIFIED: Pass new texture IDs to world generator ---
+        world = worldLoader.generateWorld(wallTextureID, orbTextureID, woodTextureID, sheetsTextureID);
         this.escapeDoor = world.getEscapeDoor();
         this.winTrigger = world.getWinTrigger();
 
@@ -693,10 +723,11 @@ public class GamePanel extends Thread {
     }
 
     public void addObjectAtPlayerPosition(String shapeType, int textureId) {
-        // ... (This method is unchanged) ...
+        // Get player position, pY will be the floor level (0.0)
         float pX = player.getPosX();
-        float pY = player.getPosY() - player.PLAYER_EYE_HEIGHT;
+        float pY = player.getPosY() - player.PLAYER_EYE_HEIGHT; //
         float pZ = player.getPosZ();
+
         synchronized (world.getStaticObjects()) {
             switch (shapeType) {
                 case "CUBE": {
@@ -710,6 +741,7 @@ public class GamePanel extends Thread {
                     break;
                 }
                 case "TABLE": {
+                    // This logic uses pX/pZ as the center and 0.0f as the floor
                     float tableX = pX;
                     float tableZ = pZ;
                     float TABLE_TOP_Y = 0.8f;
@@ -720,6 +752,9 @@ public class GamePanel extends Thread {
                     float LEG_SIZE = 0.15f;
                     float LEG_OFFSET_X = (TABLE_TOP_W / 2.0f) - (LEG_SIZE / 2.0f);
                     float LEG_OFFSET_Z = (TABLE_TOP_D / 2.0f) - (LEG_SIZE / 2.0f);
+                    // Use a default color if textureId is 0, or if specific textures are requested, use that ID.
+                    int tableTextureId = (textureId != 0) ? textureId : loadedTextures.getOrDefault("wood_texture.png", 0);
+
                     world.getStaticObjects().add(new GameObject(ShapeType.CUBE, tableX, TABLE_TOP_Y - (TABLE_TOP_H / 2.0f), tableZ,
                             TABLE_TOP_W, TABLE_TOP_H, TABLE_TOP_D, 0.5f, 0.3f, 0.0f));
                     world.getStaticObjects().add(new GameObject(ShapeType.CUBE, tableX - LEG_OFFSET_X, 0.0f, tableZ - LEG_OFFSET_Z,
@@ -736,9 +771,62 @@ public class GamePanel extends Thread {
                     adminKeys.add(new Key(pX, pY, pZ));
                     break;
                 }
+                // --- 💥 NEW CASE TO SPAWN BEDS 💥 ---
+                case "BED": {
+                    // Logic copied from WorldLoader.generateBedForRoom
+                    // We use pX and pZ as the center.
+                    float bedX = pX;
+                    float bedZ = pZ;
+
+                    // --- Bed Dimensions (NOTE: Now rotated 90 degrees: LENGTH is X, WIDTH is Z) ---
+                    float BED_WIDTH = 2.5f;  // Z-axis (depth)
+                    float BED_LENGTH = 3.0f; // X-axis (width)
+                    float BED_HEIGHT = 0.4f; // Y-axis (mattress)
+                    float LEG_HEIGHT = 0.35f;
+                    float LEG_SIZE = 0.15f;
+                    float HEADBOARD_HEIGHT = 1.2f;
+                    float HEADBOARD_THICKNESS = 0.1f;
+
+                    // Offsets for legs
+                    float legOffsetX = (BED_LENGTH / 2.0f) - (LEG_SIZE / 2.0f);
+                    float legOffsetZ = (BED_WIDTH / 2.0f) - (LEG_SIZE / 2.0f);
+
+                    // --- Get specific textures ---
+                    int woodTex = loadedTextures.getOrDefault("wood_texture.png", 0);
+                    int sheetsTex = loadedTextures.getOrDefault("sheets_texture.png", 0);
+
+
+                    // --- 1. Create Legs (Cubes, Collidable, Wood Texture) ---
+                    world.getStaticObjects().add(new GameObject(ShapeType.CUBE, bedX - legOffsetX, 0.0f, bedZ - legOffsetZ,
+                            LEG_SIZE, LEG_HEIGHT, LEG_SIZE, woodTex));
+                    world.getStaticObjects().add(new GameObject(ShapeType.CUBE, bedX + legOffsetX, 0.0f, bedZ - legOffsetZ,
+                            LEG_SIZE, LEG_HEIGHT, LEG_SIZE, woodTex));
+                    world.getStaticObjects().add(new GameObject(ShapeType.CUBE, bedX - legOffsetX, 0.0f, bedZ + legOffsetZ,
+                            LEG_SIZE, LEG_HEIGHT, LEG_SIZE, woodTex));
+                    world.getStaticObjects().add(new GameObject(ShapeType.CUBE, bedX + legOffsetX, 0.0f, bedZ + legOffsetZ,
+                            LEG_SIZE, LEG_HEIGHT, LEG_SIZE, woodTex));
+
+                    // --- 2. Create Mattress (Cube, Collidable, Sheets Texture) ---
+                    // Scale is [BED_LENGTH] wide (X) and [BED_WIDTH] deep (Z)
+                    world.getStaticObjects().add(new GameObject(ShapeType.CUBE, bedX, LEG_HEIGHT, bedZ,
+                            BED_LENGTH, BED_HEIGHT, BED_WIDTH, sheetsTex));
+
+                    // --- 3. Create Headboard (Cube, Collidable, Wood Texture) ---
+                    // Sits at the "back" (positive Z) of the bed
+                    float headboardZ = bedZ + (BED_WIDTH / 2.0f) + (HEADBOARD_THICKNESS / 2.0f);
+                    world.getStaticObjects().add(new GameObject(ShapeType.CUBE, bedX, LEG_HEIGHT, headboardZ,
+                            BED_LENGTH, HEADBOARD_HEIGHT, HEADBOARD_THICKNESS, woodTex));
+                    break;
+                }
+                // --- 💥 END NEW CASE 💥 ---
+                default:
+                    // If a shape is spawned with a texture, use the provided textureId
+                    GameObject newObj = new GameObject(ShapeType.CUBE, pX, pY, pZ, 1.0f, 1.0f, 1.0f, textureId);
+                    world.getStaticObjects().add(newObj);
+                    break;
             }
         }
-        System.out.println("Spawned " + shapeType + " at (" + pX + ", " + pY + ", " + pZ + ")");
+        System.out.println("Spawned " + shapeType + " with Texture ID " + textureId + " at (" + pX + ", " + pY + ", " + pZ + ")");
     }
 
     public void stopGame() {
@@ -782,8 +870,13 @@ public class GamePanel extends Thread {
             soundManager.stopAmbiance();
         }
         hudRenderer.cleanup();
-        glDeleteTextures(orbTextureID);
-        glDeleteTextures(wallTextureID);
+
+        // 💥 MODIFIED: Clean up all textures in the map 💥
+        for (int id : loadedTextures.values()) {
+            glDeleteTextures(id);
+        }
+        // --- 💥 END MODIFIED CLEANUP 💥 ---
+
         Callbacks.glfwFreeCallbacks(window);
         glfwDestroyWindow(window);
         glfwTerminate();
@@ -824,10 +917,21 @@ public class GamePanel extends Thread {
             player.teleportTo(x, y, z);
         }
     }
-    public int getOrbTextureID() {
-        return orbTextureID;
+
+    // 💥 NEW: Getter for the entire texture map (read-only) 💥
+    public Map<String, Integer> getLoadedTextures() {
+        return Collections.unmodifiableMap(loadedTextures);
     }
-    public int getWallTextureID() {
-        return wallTextureID;
+
+    // 💥 NEW: Utility to get texture ID by name (for admin panel spawn logic) 💥
+    public int getTextureIDByName(String name) {
+        return loadedTextures.getOrDefault(name, 0);
     }
+
+    // --- Redundant getters kept for WorldLoader access ---
+    public int getOrbTextureID() { return orbTextureID; }
+    public int getWallTextureID() { return wallTextureID; }
+    public int getWoodTextureID() { return woodTextureID; }
+    public int getSheetsTextureID() { return sheetsTextureID; }
+    // --- END Redundant getters ---
 }

@@ -261,7 +261,7 @@ public class GameObject {
                 float y0 = (float) Math.cos(Math.PI * (r + 0) * R);
                 float y1 = (float) Math.cos(Math.PI * (r + 1) * R);
                 float r0 = (float) Math.sin(Math.PI * (r + 0) * R);
-                float r1 = (float) Math.sin(Math.sin(Math.PI * (r + 1) * R));
+                float r1 = (float) Math.sin(Math.PI * (r + 1) * R);
                 float x0 = (float) Math.cos(2 * Math.PI * (s + 0) * S);
                 float x1 = (float) Math.cos(2 * Math.PI * (s + 1) * S);
                 float z0 = (float) Math.sin(2 * Math.PI * (s + 0) * S);

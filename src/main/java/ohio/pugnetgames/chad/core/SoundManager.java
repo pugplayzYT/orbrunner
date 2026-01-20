@@ -7,12 +7,16 @@ import javazoom.jl.player.Player; // Direct JLayer Player import
 /**
  * Handles playing a single, looping audio clip for ambiance.
  * MODIFIED: Now also supports playing one-shot sound effects.
+ * 💥 MODIFIED: Ambiance now pauses when a one-shot sound is played. 💥
  */
 public class SoundManager {
 
     private Thread ambianceThread;
     private volatile boolean keepPlaying = false;
     private final String AUDIO_FILE_NAME = "ambiance.mp3"; // Reference the file name here
+
+    // 💥 MODIFIED: Resetting to a small delay, as the pause/resume logic is the new fix.
+    private static final long AMBIANCE_LOOP_DELAY_MS = 100;
 
     /**
      * Loads and starts the ambiance track on a continuous loop in a background thread.
@@ -46,7 +50,7 @@ public class SoundManager {
                             if (player.isComplete()) {
                                 // If complete, it means we need to loop, so wait briefly
                                 try {
-                                    Thread.sleep(100); // Small delay between loops
+                                    Thread.sleep(AMBIANCE_LOOP_DELAY_MS); // Small delay between loops
                                 } catch (InterruptedException ignored) {
                                     // Thread interrupted means we should stop
                                     break;
@@ -76,23 +80,29 @@ public class SoundManager {
     public void stopAmbiance() {
         if (ambianceThread != null) {
             keepPlaying = false;
-            ambianceThread.interrupt();
+            // Interrupt the playing thread
+            if (ambianceThread.isAlive()) {
+                ambianceThread.interrupt();
+            }
             try {
                 ambianceThread.join(500); // Wait up to 500ms for the thread to die gracefully
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-            ambianceThread = null;
+            ambianceThread = null; // Clear the reference
         }
     }
 
     /**
      * --- NEW ---
      * Plays a single sound effect one time on a new thread.
-     * Does not loop.
+     * Pauses ambiance, plays one-shot, then resumes ambiance.
      * @param soundFileName The simple file name (e.g., "crackle.mp3") in resources.
      */
     public void playOneShot(String soundFileName) {
+        // 💥 PAUSE AMBIANCE FIRST 💥
+        stopAmbiance();
+
         Thread oneShotThread = new Thread(() -> {
             try (InputStream audioStream = getClass().getClassLoader().getResourceAsStream(soundFileName)) {
                 if (audioStream == null) {
@@ -108,6 +118,10 @@ public class SoundManager {
             } catch (Exception e) {
                 System.err.println("Error during one-shot MP3 playback.");
                 e.printStackTrace();
+            } finally {
+                // 💥 RESUME AMBIANCE AFTER PLAYBACK 💥
+                // This is guaranteed to run after the one-shot is finished.
+                loadAndLoopAmbiance();
             }
         }, "OneShot-Player-Thread");
 

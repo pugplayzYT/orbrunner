@@ -232,21 +232,22 @@ public class WorldLoader {
 
     // --- 💥 NEW: Helper method to build a standard table 💥 ---
     private void buildTable(float tableX, float tableZ) {
-        // Table Top (uses brown color)
+        // 💥 MODIFIED: Now uses WOOD TEXTURE instead of brown color 💥
+        // Table Top
         staticObjects.add(new GameObject(ShapeType.CUBE, tableX, TABLE_TOP_Y - (TABLE_TOP_H / 2.0f), tableZ,
-                TABLE_TOP_W, TABLE_TOP_H, TABLE_TOP_D, 0.5f, 0.3f, 0.0f));
+                TABLE_TOP_W, TABLE_TOP_H, TABLE_TOP_D, woodTextureID));
         // Leg 1 (Front-Left)
         staticObjects.add(new GameObject(ShapeType.CUBE, tableX - TABLE_LEG_OFFSET_X, 0.0f, tableZ - TABLE_LEG_OFFSET_Z,
-                TABLE_LEG_SIZE, TABLE_LEG_HEIGHT, TABLE_LEG_SIZE, 0.5f, 0.3f, 0.0f));
+                TABLE_LEG_SIZE, TABLE_LEG_HEIGHT, TABLE_LEG_SIZE, woodTextureID));
         // Leg 2 (Front-Right)
         staticObjects.add(new GameObject(ShapeType.CUBE, tableX + TABLE_LEG_OFFSET_X, 0.0f, tableZ - TABLE_LEG_OFFSET_Z,
-                TABLE_LEG_SIZE, TABLE_LEG_HEIGHT, TABLE_LEG_SIZE, 0.5f, 0.3f, 0.0f));
+                TABLE_LEG_SIZE, TABLE_LEG_HEIGHT, TABLE_LEG_SIZE, woodTextureID));
         // Leg 3 (Back-Left)
         staticObjects.add(new GameObject(ShapeType.CUBE, tableX - TABLE_LEG_OFFSET_X, 0.0f, tableZ + TABLE_LEG_OFFSET_Z,
-                TABLE_LEG_SIZE, TABLE_LEG_HEIGHT, TABLE_LEG_SIZE, 0.5f, 0.3f, 0.0f));
+                TABLE_LEG_SIZE, TABLE_LEG_HEIGHT, TABLE_LEG_SIZE, woodTextureID));
         // Leg 4 (Back-Right)
         staticObjects.add(new GameObject(ShapeType.CUBE, tableX + TABLE_LEG_OFFSET_X, 0.0f, tableZ + TABLE_LEG_OFFSET_Z,
-                TABLE_LEG_SIZE, TABLE_LEG_HEIGHT, TABLE_LEG_SIZE, 0.5f, 0.3f, 0.0f));
+                TABLE_LEG_SIZE, TABLE_LEG_HEIGHT, TABLE_LEG_SIZE, woodTextureID));
     }
     // --- 💥 END NEW 💥 ---
 

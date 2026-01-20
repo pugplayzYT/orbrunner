@@ -59,7 +59,8 @@ public class AdminPanelUI extends JFrame {
         mainPanel.add(Box.createRigidArea(new Dimension(0, 5)));
 
         // Shape Selector
-        shapeSelector = new JComboBox<>(new String[]{"CUBE", "SPHERE", "TABLE", "KEY", "BED"});
+        // 💥 MODIFIED: Added TREE and ESCAPE_DOOR to the list 💥
+        shapeSelector = new JComboBox<>(new String[]{"CUBE", "SPHERE", "TABLE", "KEY", "BED", "TREE", "ESCAPE_DOOR"});
         shapeSelector.setMaximumSize(new Dimension(200, 30));
         shapeSelector.setAlignmentX(Component.CENTER_ALIGNMENT);
         mainPanel.add(new JLabel("Shape:"));
@@ -271,7 +272,7 @@ public class AdminPanelUI extends JFrame {
     }
 
     /**
-     * Helper to wrap a slider and its label in a panel.
+     * Helper to create a slider panel.
      */
     private JPanel createSliderPanel(JSlider slider, String labelText) {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER));

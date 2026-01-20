@@ -62,9 +62,9 @@ public class GamePanel extends Thread {
 
     // --- HORROR FIELDS ---
     private float horrorLevel = 0.0f;
-    // --- 💥 MODIFICATION: Tuned horror rates (4x original) ---
-    private final float HORROR_RATE_STANDARD = 0.02f; // Was 0.005f
-    private final float HORROR_RATE_COURTYARD = 0.004f; // Was 0.001f
+    // --- 💥 MODIFICATION: Tuned horror rates (Reduced frequency as requested) ---
+    private final float HORROR_RATE_STANDARD = 0.005f; // Was 0.02f
+    private final float HORROR_RATE_COURTYARD = 0.001f; // Was 0.004f
     // --- 💥 END MODIFICATION ---
     private final String CRACKLE_SOUND_FILE = "crackle.mp3";
 
@@ -818,7 +818,53 @@ public class GamePanel extends Thread {
                             BED_LENGTH, HEADBOARD_HEIGHT, HEADBOARD_THICKNESS, woodTex));
                     break;
                 }
-                // --- 💥 END NEW CASE 💥 ---
+                // --- 💥 NEW CASE TO SPAWN TREES 💥 ---
+                case "TREE": {
+                    // Dimensions from WorldLoader
+                    float TRUNK_HEIGHT = 4.0f;
+                    float TRUNK_WIDTH = 0.4f;
+                    float LEAF_RADIUS = 2.0f;
+
+                    GameObject trunk = new GameObject(
+                            ShapeType.CUBE,
+                            pX, 0.0f, pZ,
+                            TRUNK_WIDTH, TRUNK_HEIGHT, TRUNK_WIDTH,
+                            0.5f, 0.3f, 0.0f, // Brown color
+                            true, true
+                    );
+
+                    float leafY = TRUNK_HEIGHT;
+                    GameObject leaves = new GameObject(
+                            ShapeType.SPHERE,
+                            pX, leafY, pZ,
+                            LEAF_RADIUS, LEAF_RADIUS, LEAF_RADIUS,
+                            0.0f, 0.7f, 0.0f, // Green color
+                            false, true
+                    );
+
+                    world.getStaticObjects().add(trunk);
+                    world.getStaticObjects().add(leaves);
+                    break;
+                }
+                // --- 💥 NEW CASE TO SPAWN ESCAPE DOOR 💥 ---
+                case "ESCAPE_DOOR": {
+                    // Default door dimensions (tunnel width/height)
+                    float doorW = 4.0f;
+                    float doorH = 3.0f;
+                    float doorD = 0.1f;
+
+                    // Color: Same as escape door (Brownish)
+                    GameObject door = new GameObject(
+                            ShapeType.CUBE,
+                            pX, 0.0f, pZ,
+                            doorW, doorH, doorD,
+                            0.5f, 0.3f, 0.0f,
+                            true, true
+                    );
+                    world.getStaticObjects().add(door);
+                    break;
+                }
+                // --- 💥 END NEW CASES 💥 ---
                 default:
                     // If a shape is spawned with a texture, use the provided textureId
                     GameObject newObj = new GameObject(ShapeType.CUBE, pX, pY, pZ, 1.0f, 1.0f, 1.0f, textureId);

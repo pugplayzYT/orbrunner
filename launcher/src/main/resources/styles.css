@@ -1,0 +1,416 @@
+/*
+ * OrbRunner Launcher — Dark Theme
+ */
+
+/* ── Root ── */
+.root-pane {
+    -fx-background-color: #0d0f18;
+}
+
+/* ── Title ── */
+.title-label {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 52px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #ffffff;
+}
+
+.subtitle-label {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+    -fx-font-weight: normal;
+    -fx-text-fill: #4a5568;
+    -fx-letter-spacing: 4px;
+}
+
+.version-info-label {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+    -fx-text-fill: #4a5568;
+    -fx-padding: 4 0 0 0;
+}
+
+/* ── Action Button ── */
+.action-button {
+    -fx-background-color: #1971c2;
+    -fx-text-fill: #ffffff;
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-cursor: hand;
+    -fx-padding: 14 50 14 50;
+}
+
+.action-button:hover {
+    -fx-background-color: #1c7ed6;
+}
+
+.action-button:pressed {
+    -fx-background-color: #1864ab;
+}
+
+.action-button:disabled {
+    -fx-background-color: #1e2533;
+    -fx-text-fill: #3d4f63;
+}
+
+/* ── Status Label ── */
+.status-label {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+    -fx-text-fill: #4a5568;
+}
+
+/* ── Bottom Bar ── */
+.combo-label {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+    -fx-text-fill: #4a5568;
+}
+
+.version-combo {
+    -fx-background-color: #161b27;
+    -fx-border-color: #2a3347;
+    -fx-border-radius: 5;
+    -fx-background-radius: 5;
+    -fx-text-fill: #c1cfe0;
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+    -fx-prompt-text-fill: #4a5568;
+}
+
+.version-combo .list-cell {
+    -fx-background-color: #161b27;
+    -fx-text-fill: #c1cfe0;
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+}
+
+.version-combo .list-view {
+    -fx-background-color: #161b27;
+}
+
+.version-combo .list-view .list-cell:hover {
+    -fx-background-color: #1e2533;
+}
+
+.version-combo .list-view .list-cell:selected {
+    -fx-background-color: #1971c2;
+}
+
+.refresh-button {
+    -fx-background-color: #161b27;
+    -fx-text-fill: #4a5568;
+    -fx-font-size: 16px;
+    -fx-background-radius: 5;
+    -fx-border-color: #2a3347;
+    -fx-border-radius: 5;
+    -fx-cursor: hand;
+    -fx-padding: 4 10 4 10;
+}
+
+.refresh-button:hover {
+    -fx-background-color: #1e2533;
+    -fx-text-fill: #c1cfe0;
+}
+
+.server-indicator {
+    -fx-font-size: 12px;
+    -fx-text-fill: #e03131;
+}
+
+.server-text {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 12px;
+    -fx-text-fill: #4a5568;
+}
+
+/* ── Progress Overlay ── */
+.progress-overlay {
+    -fx-background-color: rgba(13, 15, 24, 0.94);
+    -fx-padding: 60;
+}
+
+.download-title {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 22px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #ffffff;
+}
+
+.download-progress {
+    -fx-accent: #1971c2;
+}
+
+.download-progress .bar {
+    -fx-background-color: #1971c2;
+    -fx-background-radius: 4;
+    -fx-background-insets: 0;
+}
+
+.download-progress .track {
+    -fx-background-color: #1e2533;
+    -fx-background-radius: 4;
+    -fx-background-insets: 0;
+}
+
+.progress-text {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+    -fx-text-fill: #8899aa;
+}
+
+.download-size-text {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 12px;
+    -fx-text-fill: #4a5568;
+}
+
+.cancel-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #c92a2a;
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-border-color: #c92a2a;
+    -fx-border-radius: 5;
+    -fx-background-radius: 5;
+    -fx-padding: 8 30 8 30;
+    -fx-cursor: hand;
+}
+
+.cancel-button:hover {
+    -fx-background-color: rgba(201, 42, 42, 0.12);
+}
+
+/* ── Settings Gear Button ── */
+.settings-gear-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #4a5568;
+    -fx-font-size: 18px;
+    -fx-cursor: hand;
+    -fx-padding: 2 4 2 4;
+    -fx-background-radius: 4;
+}
+
+.settings-gear-button:hover {
+    -fx-text-fill: #c1cfe0;
+    -fx-background-color: #1e2533;
+}
+
+/* ── Settings Overlay ── */
+.settings-overlay {
+    -fx-background-color: #0d0f18;
+    -fx-padding: 36 50 36 50;
+}
+
+.settings-header {
+    -fx-padding: 0 0 28 0;
+}
+
+.settings-title {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #ffffff;
+}
+
+.back-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #4a5568;
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 16px;
+    -fx-cursor: hand;
+    -fx-border-color: transparent;
+    -fx-border-radius: 5;
+    -fx-background-radius: 5;
+    -fx-padding: 2 8 2 8;
+}
+
+.back-button:hover {
+    -fx-text-fill: #c92a2a;
+    -fx-background-color: rgba(201, 42, 42, 0.1);
+}
+
+.settings-rows {
+    -fx-padding: 0 0 24 0;
+}
+
+.settings-row {
+    -fx-padding: 10 0 10 0;
+    -fx-border-color: transparent transparent #141922 transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.settings-row-label {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+    -fx-text-fill: #8899aa;
+}
+
+.settings-value-label {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+    -fx-text-fill: #c1cfe0;
+}
+
+/* Slider */
+.settings-slider {
+    -fx-padding: 0;
+}
+
+.settings-slider .thumb {
+    -fx-background-color: #1971c2;
+    -fx-background-radius: 50%;
+    -fx-pref-width: 14px;
+    -fx-pref-height: 14px;
+    -fx-effect: none;
+}
+
+.settings-slider .thumb:hover {
+    -fx-background-color: #1c7ed6;
+}
+
+.settings-slider .track {
+    -fx-background-color: #2a3347;
+    -fx-pref-height: 3px;
+    -fx-background-radius: 2;
+}
+
+.settings-slider .axis {
+    -fx-tick-label-fill: transparent;
+}
+
+/* Invert Y Toggle */
+.invert-toggle {
+    -fx-background-color: #161b27;
+    -fx-text-fill: #4a5568;
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 12px;
+    -fx-background-radius: 4;
+    -fx-border-color: #2a3347;
+    -fx-border-radius: 4;
+    -fx-cursor: hand;
+    -fx-padding: 5 16 5 16;
+    -fx-min-width: 46px;
+}
+
+.invert-toggle:selected {
+    -fx-background-color: #1971c2;
+    -fx-text-fill: #ffffff;
+    -fx-border-color: #1971c2;
+}
+
+.invert-toggle:hover:selected {
+    -fx-background-color: #1c7ed6;
+}
+
+.settings-hint {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 11px;
+    -fx-text-fill: #2a3347;
+}
+
+/* ── Changelog Button ── */
+.changelog-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #4a5568;
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 12px;
+    -fx-cursor: hand;
+    -fx-border-color: #2a3347;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 4 12 4 12;
+}
+
+.changelog-button:hover {
+    -fx-text-fill: #c1cfe0;
+    -fx-border-color: #3d4f63;
+}
+
+/* ── Changelog Overlay ── */
+.changelog-overlay {
+    -fx-background-color: #0d0f18;
+    -fx-padding: 36 50 0 50;
+}
+
+.changelog-scroll {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 0;
+}
+
+.changelog-scroll .viewport {
+    -fx-background-color: transparent;
+}
+
+.changelog-scroll .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 6px;
+}
+
+.changelog-scroll .scroll-bar:vertical .thumb {
+    -fx-background-color: #2a3347;
+    -fx-background-radius: 3;
+}
+
+.changelog-scroll .scroll-bar:vertical .track {
+    -fx-background-color: transparent;
+}
+
+.changelog-scroll .scroll-bar:vertical .increment-button,
+.changelog-scroll .scroll-bar:vertical .decrement-button {
+    -fx-pref-height: 0;
+    -fx-opacity: 0;
+}
+
+.changelog-content {
+    -fx-padding: 4 8 24 0;
+}
+
+/* ── Markdown Styles ── */
+.md-h1 {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #ffffff;
+    -fx-padding: 10 0 4 0;
+}
+
+.md-h2 {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #4dabf7;
+    -fx-padding: 10 0 2 0;
+}
+
+.md-h3 {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #f08c00;
+    -fx-padding: 6 0 2 0;
+}
+
+.md-bullet {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+    -fx-text-fill: #c1cfe0;
+    -fx-padding: 1 0 1 0;
+}
+
+.md-text {
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 13px;
+    -fx-text-fill: #8899aa;
+    -fx-padding: 1 0 1 0;
+}
+
+.md-separator {
+    -fx-border-color: #1a2030;
+}

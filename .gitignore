@@ -55,3 +55,12 @@ src/main/resources/inter_extracted/**
 !src/main/resources/inter_extracted/extras/
 !src/main/resources/inter_extracted/extras/ttf/
 !src/main/resources/inter_extracted/extras/ttf/Inter-Regular.ttf
+
+### Server ###
+server/versions/
+server/__pycache__/
+*.pyc
+
+### Launcher ###
+launcher/build/
+launcher/.gradle/

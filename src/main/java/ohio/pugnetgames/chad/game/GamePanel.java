@@ -242,6 +242,11 @@ public class GamePanel extends Thread {
         inGameUI = new InGameUI();
         inGameUI.init();
 
+        // Watch for settings changes from the launcher
+        inGameUI.getSettingsManager().watchForExternalChanges(s -> {
+            inGameUI.loadFromSettingsFile();
+        });
+
         // Forward typed characters to InGameUI for text-input fields (Create Run screen)
         glfwSetCharCallback(window, (win, codepoint) -> {
             if (inGameUI != null) inGameUI.onChar((int) codepoint);

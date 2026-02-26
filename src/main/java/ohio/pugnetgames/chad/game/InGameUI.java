@@ -3,6 +3,7 @@ package ohio.pugnetgames.chad.game;
 import ohio.pugnetgames.chad.core.Difficulty;
 import ohio.pugnetgames.chad.core.RunData;
 import ohio.pugnetgames.chad.core.ScoreManager;
+import ohio.pugnetgames.chad.core.SettingsManager;
 
 import java.util.*;
 
@@ -95,7 +96,10 @@ public class InGameUI {
     private boolean pauseResumeRequested = false;
     private boolean pauseQuitToMenuRequested = false;
 
-    // Pause menu settings (read/written by GamePanel)
+    // Shared settings file bridge
+    private final SettingsManager settingsManager = new SettingsManager();
+
+    // Pause menu settings (read/written by GamePanel and synced to settings file)
     private float sensitivity = 0.1f; // Mouse sensitivity (0.01 - 0.5)
     private float fieldOfView = 60.0f; // FOV (30 - 120)
     private float fogDensity = 0.07f; // Fog density (0.0 - 0.2)
@@ -150,6 +154,31 @@ public class InGameUI {
         // Load update logs
         updateLogManager = new UpdateLogManager();
         updateLogManager.loadAll();
+
+        // Load persisted settings
+        loadFromSettingsFile();
+    }
+
+    public void loadFromSettingsFile() {
+        settingsManager.load();
+        sensitivity  = settingsManager.sensitivity;
+        fieldOfView  = settingsManager.fieldOfView;
+        fogDensity   = settingsManager.fogDensity;
+        invertY      = settingsManager.invertY;
+        masterVolume = settingsManager.masterVolume;
+    }
+
+    public void saveToSettingsFile() {
+        settingsManager.sensitivity  = sensitivity;
+        settingsManager.fieldOfView  = fieldOfView;
+        settingsManager.fogDensity   = fogDensity;
+        settingsManager.invertY      = invertY;
+        settingsManager.masterVolume = masterVolume;
+        settingsManager.save();
+    }
+
+    public SettingsManager getSettingsManager() {
+        return settingsManager;
     }
 
     // ============================================================
@@ -1041,6 +1070,7 @@ public class InGameUI {
         cy = renderSliderWithValue(cx, cy, contentW, "Sens", sensNorm,
                 String.format("%.2f", sensitivity), 0.8f, 0.6f, 1.0f, (val) -> {
                     sensitivity = 0.01f + val * (0.5f - 0.01f);
+                    saveToSettingsFile();
                 });
 
         // FOV slider (30 - 120)
@@ -1048,6 +1078,7 @@ public class InGameUI {
         cy = renderSliderWithValue(cx, cy, contentW, "FOV", fovNorm,
                 String.format("%.0f", fieldOfView), 1.0f, 0.8f, 0.3f, (val) -> {
                     fieldOfView = 30.0f + val * (120.0f - 30.0f);
+                    saveToSettingsFile();
                 });
 
         // Fog density slider (0.0 - 0.2)
@@ -1055,12 +1086,14 @@ public class InGameUI {
         cy = renderSliderWithValue(cx, cy, contentW, "Fog", fogNorm,
                 String.format("%.3f", fogDensity), 0.5f, 0.7f, 1.0f, (val) -> {
                     fogDensity = val * 0.2f;
+                    saveToSettingsFile();
                 });
 
         // Volume slider (0.0 - 1.0)
         cy = renderSliderWithValue(cx, cy, contentW, "Vol", masterVolume,
                 String.format("%.0f%%", masterVolume * 100), 0.3f, 1.0f, 0.5f, (val) -> {
                     masterVolume = val;
+                    saveToSettingsFile();
                 });
 
         cy += 5;
@@ -1073,7 +1106,7 @@ public class InGameUI {
         String invText = invertY ? "Invert Y: ON" : "Invert Y: OFF";
         pauseButtons.add(new Button(invText, cx, cy, contentW, 38,
                 invertY ? 1.0f : 0.5f, invertY ? 0.65f : 0.5f, invertY ? 0.0f : 0.5f,
-                () -> invertY = !invertY));
+                () -> { invertY = !invertY; saveToSettingsFile(); }));
         cy += 50;
 
         // Quit to Menu button

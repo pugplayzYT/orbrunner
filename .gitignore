@@ -40,3 +40,15 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Fonts and Useless Stuff ###
+*.ttf
+*.otf
+*.woff
+*.woff2
+*.zip
+src/main/resources/Inter/
+src/main/resources/inter_extracted/**
+!src/main/resources/inter_extracted/extras/
+!src/main/resources/inter_extracted/extras/ttf/
+!src/main/resources/inter_extracted/extras/ttf/Inter-Regular.ttf

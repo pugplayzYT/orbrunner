@@ -247,6 +247,10 @@ public class GamePanel extends Thread {
             if (inGameUI != null) inGameUI.onChar((int) codepoint);
         });
 
+        // Populate the runs list on startup (normally done by transitionToMainMenu,
+        // but the game launches directly into MAIN_MENU so it must be seeded here)
+        inGameUI.refreshRunsList(runManager.loadAllRuns());
+
         // OpenGL state
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glEnable(GL_DEPTH_TEST);

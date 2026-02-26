@@ -585,7 +585,7 @@ public class InGameUI {
                 break;
             case BULLET:
                 if (isFirstSubLine) {
-                    drawFilledRect(x + 12, y + 16, 6, 6, 0.6f, 0.8f, 0.6f, 1.0f);
+                    drawFilledCircle(x + 15, y + 6, 3, 0.6f, 0.8f, 0.6f, 1.0f);
                 }
                 fontRenderer.drawText(text, x + 28, y, 0.8f, 0.8f, 0.8f);
                 break;
@@ -1172,6 +1172,22 @@ public class InGameUI {
         float textY = btn.rect.y + (btn.rect.h / 2.0f) - 9;
         fontRenderer.drawText(btn.label, textX, textY,
                 btn.borderR, btn.borderG, btn.borderB);
+    }
+
+    private void drawFilledCircle(float cx, float cy, float radius,
+            float r, float g, float b, float a) {
+        glDisable(GL_TEXTURE_2D);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glColor4f(r, g, b, a);
+        glBegin(GL_TRIANGLE_FAN);
+        glVertex2f(cx, cy);
+        int segments = 16;
+        for (int i = 0; i <= segments; i++) {
+            double angle = 2.0 * Math.PI * i / segments;
+            glVertex2f(cx + (float) (Math.cos(angle) * radius), cy + (float) (Math.sin(angle) * radius));
+        }
+        glEnd();
     }
 
     private void drawFilledRect(float x, float y, float w, float h,

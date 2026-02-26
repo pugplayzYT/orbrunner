@@ -94,12 +94,14 @@ public class UpdateLogManager {
 
                 while ((rawLine = reader.readLine()) != null) {
                     MarkdownLine ml = parseLine(rawLine);
-                    mdLines.add(ml);
 
-                    // Extract title from first H1
+                    // Extract title from first H1 and skip it — it's shown in the entry header
                     if (ml.type == MarkdownLine.Type.H1 && title.equals(filename)) {
                         title = ml.text;
+                        continue;
                     }
+
+                    mdLines.add(ml);
                 }
 
                 entries.add(new UpdateEntry(title, filename, mdLines));

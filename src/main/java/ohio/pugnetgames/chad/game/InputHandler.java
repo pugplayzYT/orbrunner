@@ -2,16 +2,15 @@ package ohio.pugnetgames.chad.game;
 
 import org.lwjgl.glfw.GLFWCursorPosCallback;
 import org.lwjgl.glfw.GLFWKeyCallback;
-import org.lwjgl.system.MemoryStack;
-
-import java.nio.DoubleBuffer;
 
 import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.system.MemoryStack.stackPush;
 
 /**
  * Manages all keyboard and mouse input states.
  * GamePanel owns this and Player reads from it.
+ *
+ * REWRITTEN: No longer registers its own GLFW callbacks.
+ * GamePanel sets up global callbacks and forwards events here.
  */
 public class InputHandler {
 
@@ -23,44 +22,60 @@ public class InputHandler {
     private double lastMouseX, lastMouseY;
     private boolean firstMouseMovement = true;
 
-    // Constants
-    private final float ROTATION_SENSITIVITY = 0.1f;
+    // Sensitivity (adjustable from pause menu)
+    private float ROTATION_SENSITIVITY = 0.1f;
 
-    /**
-     * Registers the callbacks with the GLFW window.
-     */
-    public InputHandler(long window) {
-        // Read initial cursor position
-        try (MemoryStack stack = stackPush()) {
-            DoubleBuffer xBuf = stack.mallocDouble(1);
-            DoubleBuffer yBuf = stack.mallocDouble(1);
-            glfwGetCursorPos(window, xBuf, yBuf);
-            lastMouseX = xBuf.get(0);
-            lastMouseY = yBuf.get(0);
-        }
-
-        // --- FIX: Set the public keyCallback here ---
-        glfwSetKeyCallback(window, keyCallback);
-        glfwSetCursorPosCallback(window, cursorPosCallback);
-        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-        firstMouseMovement = true;
+    public void setSensitivity(float s) {
+        this.ROTATION_SENSITIVITY = s;
     }
 
-    // --- FIX: Made this public so GamePanel can access it ---
+    public float getSensitivity() {
+        return ROTATION_SENSITIVITY;
+    }
+
+    /**
+     * Lightweight constructor — no GLFW registration.
+     * GamePanel manages the GLFW callbacks and forwards events.
+     */
+    public InputHandler() {
+        // Nothing to do — GamePanel handles callback registration
+        this.firstMouseMovement = true;
+    }
+
+    /**
+     * Legacy constructor for compatibility — ignores the window parameter.
+     * Use the no-arg constructor instead.
+     */
+    public InputHandler(long window) {
+        this(); // just call no-arg
+    }
+
+    /**
+     * The key callback logic — invoke this from GamePanel's global key handler.
+     */
     public final GLFWKeyCallback keyCallback = new GLFWKeyCallback() {
         @Override
         public void invoke(long window, int key, int scancode, int action, int mods) {
             boolean pressed = (action != GLFW_RELEASE);
-            if (key == GLFW_KEY_W) wPressed = pressed;
-            else if (key == GLFW_KEY_S) sPressed = pressed;
-            else if (key == GLFW_KEY_A) aPressed = pressed;
-            else if (key == GLFW_KEY_D) dPressed = pressed;
-            else if (key == GLFW_KEY_SPACE) spacePressed = pressed;
-            else if (key == GLFW_KEY_LEFT_SHIFT) shiftPressed = pressed;
+            if (key == GLFW_KEY_W)
+                wPressed = pressed;
+            else if (key == GLFW_KEY_S)
+                sPressed = pressed;
+            else if (key == GLFW_KEY_A)
+                aPressed = pressed;
+            else if (key == GLFW_KEY_D)
+                dPressed = pressed;
+            else if (key == GLFW_KEY_SPACE)
+                spacePressed = pressed;
+            else if (key == GLFW_KEY_LEFT_SHIFT)
+                shiftPressed = pressed;
         }
     };
 
-    // --- FIX: Made this public so GamePanel can reset it ---
+    /**
+     * The cursor position callback logic — invoke from GamePanel's global cursor
+     * handler.
+     */
     public final GLFWCursorPosCallback cursorPosCallback = new GLFWCursorPosCallback() {
         @Override
         public void invoke(long window, double xpos, double ypos) {

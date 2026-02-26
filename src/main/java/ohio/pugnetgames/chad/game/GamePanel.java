@@ -1,20 +1,17 @@
 package ohio.pugnetgames.chad.game;
 
-import ohio.pugnetgames.chad.GameApp;
 import ohio.pugnetgames.chad.core.BuildManager;
 import ohio.pugnetgames.chad.core.ScoreManager;
 import ohio.pugnetgames.chad.core.SoundManager;
-import ohio.pugnetgames.chad.core.Difficulty; // <-- IMPORT NEW ENUM
+import ohio.pugnetgames.chad.core.Difficulty;
 import ohio.pugnetgames.chad.game.GameObject.ShapeType;
 import ohio.pugnetgames.chad.game.Room.RoomType;
 
-// --- 💥FIX: Use our OWN PathNode class ---
 import ohio.pugnetgames.chad.game.PathNode;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap; // 💥 NEW IMPORTS 💥
-import java.util.Collections; // 💥 NEW IMPORTS 💥
-// --- 💥END FIX ---
+import java.util.HashMap;
+import java.util.Collections;
 
 import org.lwjgl.glfw.Callbacks;
 import org.lwjgl.glfw.GLFWErrorCallback;
@@ -22,9 +19,8 @@ import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.system.MemoryStack;
 
-import javax.swing.JOptionPane;
-import javax.swing.SwingUtilities;
-
+import java.awt.datatransfer.StringSelection;
+import java.awt.Toolkit;
 import java.nio.IntBuffer;
 import java.util.ArrayList;
 
@@ -34,25 +30,34 @@ import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.system.MemoryUtil.NULL;
 
 /**
- * GamePanel (LwjglGame) handles the main game loop, window,
- * and orchestrates all the game systems (Player, World, Keys, UI).
- * NEW: Added DIY A* Pathfinding AI.
- * NEW: Added Objectives & Hot/Cold System.
+ * GamePanel handles the main game loop, window, and orchestrates all game
+ * systems.
  *
- * MODIFIED: Now accepts a Difficulty setting.
- * MODIFIED: Now loads and passes bedroom textures.
- * 💥 MODIFIED: Now manages a dynamic map of all loaded textures.
+ * REWRITTEN: No longer uses Swing. All UI (main menu, admin panel, game over)
+ * is rendered in-game via InGameUI using OpenGL.
+ *
+ * Game States: MAIN_MENU -> PLAYING -> GAME_OVER -> MAIN_MENU
  */
 public class GamePanel extends Thread {
 
-    private final GameApp app;
+    // ============================================================
+    // GAME STATE MACHINE
+    // ============================================================
+    public enum GameState {
+        MAIN_MENU,
+        PLAYING,
+        PAUSED,
+        GAME_OVER
+    }
+
+    private GameState gameState = GameState.MAIN_MENU;
+
     private long window;
-    private volatile boolean isRunning;
-    private long currentScore; // Now tracks WINS
-    private long bestScoreCache; // Now tracks BEST WINS
+    private volatile boolean isRunning = true; // controls the main loop
+    private long currentScore;
+    private long bestScoreCache;
 
     // --- GAME FIELDS ---
-    // --- MODIFIED: TOTAL_KEYS is no longer final, set by difficulty ---
     private int TOTAL_KEYS;
     private int keysCollected = 0;
     private GameObject escapeDoor;
@@ -62,21 +67,18 @@ public class GamePanel extends Thread {
 
     // --- HORROR FIELDS ---
     private float horrorLevel = 0.0f;
-    // --- 💥 MODIFICATION: Tuned horror rates (Reduced frequency as requested) ---
-    private final float HORROR_RATE_STANDARD = 0.005f; // Was 0.02f
-    private final float HORROR_RATE_COURTYARD = 0.001f; // Was 0.004f
-    // --- 💥 END MODIFICATION ---
+    private final float HORROR_RATE_STANDARD = 0.005f;
+    private final float HORROR_RATE_COURTYARD = 0.001f;
     private final String CRACKLE_SOUND_FILE = "crackle.mp3";
 
-    // --- 💥FIX: RE-ADDED OBJECTIVE / HUD FIELDS ---
+    // --- OBJECTIVE / HUD FIELDS ---
     private String currentObjectiveText = "";
     private String popupMessage = "";
     private float popupMessageTimer = 0.0f;
-    private final float POPUP_MESSAGE_DURATION = 4.0f; // 4 seconds
-    private final float FRAME_TIME_ESTIMATE = 0.0166f; // Assuming 60fps for timer
+    private final float POPUP_MESSAGE_DURATION = 4.0f;
+    private final float FRAME_TIME_ESTIMATE = 0.0166f;
     private boolean allKeysCollectedMessageTriggered = false;
     private String hotColdText = "";
-    // --- 💥END FIX ---
 
     // --- GAME SYSTEMS ---
     private World world;
@@ -86,31 +88,30 @@ public class GamePanel extends Thread {
     private HudRenderer hudRenderer;
     private DebugRenderer debugRenderer;
     private WorldLoader worldLoader;
+    private InGameUI inGameUI;
 
-    // --- 💥FIX: DIY A* PATHFINDING AI ---
+    // --- DIY A* PATHFINDING AI ---
     private PathfindingManager pathfinder;
-    private List<PathNode> aiPath; // Note: This is OUR PathNode
+    private List<PathNode> aiPath;
     private int aiPathIndex;
-    // 💥FIX: Added PATH_FAILED state to prevent spam
-    private enum AiState { IDLE, FINDING_PATH, FOLLOWING_PATH, PATH_FAILED }
+
+    private enum AiState {
+        IDLE, FINDING_PATH, FOLLOWING_PATH, PATH_FAILED
+    }
+
     private AiState aiState = AiState.IDLE;
-    // 💥FIX: Timer for failed state
     private float aiFailedPathTimer = 0.0f;
-    private final float AI_RETRY_COOLDOWN = 3.0f; // 3 seconds
-    // --- 💥END FIX ---
+    private final float AI_RETRY_COOLDOWN = 3.0f;
 
     // --- Textures ---
-    // 💥 MODIFIED: Now class fields only hold the "default" texture IDs needed for World gen 💥
     private int orbTextureID;
     private int wallTextureID;
     private int woodTextureID;
     private int sheetsTextureID;
-    // 💥 NEW: Map to hold all loaded textures (Name -> ID) 💥
     private Map<String, Integer> loadedTextures = new HashMap<>();
 
-
     // --- Game State ---
-    private final float FIELD_OF_VIEW = 60.0f;
+    private float FIELD_OF_VIEW = 60.0f; // mutable — adjusted from pause menu
     private final float NEAR_PLANE = 0.1f;
     private final float FAR_PLANE = 100.0f;
 
@@ -119,45 +120,39 @@ public class GamePanel extends Thread {
     private boolean adminPanelFeatureAvailable = false;
     private volatile boolean isAutoCollectActive = false;
     private volatile float groundR = 0.1f, groundG = 0.5f, groundB = 0.2f;
-    private AdminPanelUI adminPanelUI;
     private boolean debugLinesFeatureAvailable = false;
     private volatile boolean isDebugLinesActive = false;
-    // --- 💥 NEW: Full Map State ---
     private volatile boolean isMapActive = false;
-    // --- 💥 END NEW ---
 
-    // --- NEW: Difficulty State ---
-    private final Difficulty difficulty;
+    // Current difficulty (set when game starts from menu)
+    private Difficulty difficulty = Difficulty.EASY;
 
-    // --- MODIFIED: Constructor now accepts Difficulty ---
-    public GamePanel(GameApp app, Difficulty difficulty) {
-        this.app = app;
-        this.difficulty = difficulty; // Store the difficulty
+    // Mouse cursor visibility state tracking
+    private boolean cursorVisible = true;
+
+    // Game over state
+    private String gameOverMessage = "";
+    private boolean gameOverIsWin = false;
+
+    public GamePanel() {
+        // No-arg constructor — everything is managed internally
     }
 
     @Override
     public void run() {
         init();
-        loop();
+        mainLoop();
         dispose();
     }
 
+    // ============================================================
+    // INITIALIZATION
+    // ============================================================
+
     private void init() {
-        // ... (All the GLFW and window setup code is the same) ...
         this.freeCamFeatureAvailable = BuildManager.getBoolean("feature.freecam.enabled");
         this.adminPanelFeatureAvailable = BuildManager.getBoolean("feature.adminpanel.enabled");
         this.debugLinesFeatureAvailable = BuildManager.getBoolean("feature.debuglines.enabled");
-
-        // --- NEW: Set TOTAL_KEYS based on difficulty ---
-        if (this.difficulty == Difficulty.HARD) {
-            this.TOTAL_KEYS = 10;
-        } else {
-            this.TOTAL_KEYS = 3; // Default to Easy
-        }
-        // --- END NEW ---
-
-        // We initialize AdminPanelUI LATER, after textures are loaded,
-        // but BEFORE GLFW is initialized.
 
         GLFWErrorCallback.createPrint(System.err).set();
         if (!glfwInit()) {
@@ -170,25 +165,43 @@ public class GamePanel extends Thread {
         GLFWVidMode vidmode = glfwGetVideoMode(primaryMonitor);
         int width = vidmode.width();
         int height = vidmode.height();
-        window = glfwCreateWindow(width, height, "TRUE OpenGL Maze Escape (LWJGL)", primaryMonitor, NULL);
+        window = glfwCreateWindow(width, height, "Maze Escape 3D - OpenGL", primaryMonitor, NULL);
         if (window == NULL) {
             System.err.println("FATAL: Failed to create window, trying fallback.");
-            width = 800; height = 600;
-            window = glfwCreateWindow(width, height, "TRUE OpenGL Maze Escape (LWJGL)", NULL, NULL);
+            width = 800;
+            height = 600;
+            window = glfwCreateWindow(width, height, "Maze Escape 3D - OpenGL", NULL, NULL);
             if (window == NULL) {
                 System.err.println("FATAL: Failed to create window in fallback mode.");
                 return;
             }
         }
-        inputHandler = new InputHandler(window);
-        glfwSetKeyCallback(window, this::gameStateKeyCallback);
+
+        // Key callback — we handle it ourselves, InputHandler gets created later
+        glfwSetKeyCallback(window, this::globalKeyCallback);
+
+        // Mouse callbacks for UI
+        glfwSetCursorPosCallback(window, (win, xpos, ypos) -> {
+            if (inGameUI != null) {
+                inGameUI.onMouseMove(xpos, ypos);
+            }
+            // Forward to input handler during gameplay
+            if (inputHandler != null && gameState == GameState.PLAYING && !cursorVisible) {
+                inputHandler.cursorPosCallback.invoke(win, xpos, ypos);
+            }
+        });
+        glfwSetMouseButtonCallback(window, (win, button, action, mods) -> {
+            if (inGameUI != null) {
+                inGameUI.onMouseButton(button, action);
+            }
+        });
+
         glfwMakeContextCurrent(window);
         glfwSwapInterval(1);
         glfwShowWindow(window);
         GL.createCapabilities();
 
-        // --- 💥 MODIFIED: Load all textures and populate the map NOW (on game thread) 💥 ---
-        // This MUST run before AdminPanelUI is created so the texture list is full.
+        // Load all textures
         List<String> textureNames = TextureLoader.getAllTextureFilenames();
         for (String name : textureNames) {
             int id = TextureLoader.loadTexture(name);
@@ -197,177 +210,502 @@ public class GamePanel extends Thread {
             }
         }
 
-        // Assign specific IDs to class fields for easy access by WorldLoader
         orbTextureID = loadedTextures.getOrDefault("orb_texture.png", 0);
         wallTextureID = loadedTextures.getOrDefault("tunnel_texture.png", 0);
         woodTextureID = loadedTextures.getOrDefault("wood_texture.png", 0);
         sheetsTextureID = loadedTextures.getOrDefault("sheets_texture.png", 0);
-        // --- 💥 END MODIFIED TEXTURE LOAD 💥 ---
 
-        // 💥 FIX: Initialize AdminPanelUI AFTER textures are loaded, but still on EDT 💥
-        if (adminPanelFeatureAvailable) {
-            SwingUtilities.invokeLater(() -> adminPanelUI = new AdminPanelUI(this));
-        }
-
+        // Initialize game systems that persist across rounds
         worldLoader = new WorldLoader();
-        // --- Init Game Systems (World gen is now in startGame) ---
-        player = new Player(0, 1.5f, 0);
         keyManager = new KeyManager();
         hudRenderer = new HudRenderer();
         debugRenderer = new DebugRenderer();
         soundManager = new SoundManager();
-        soundManager.loadAndLoopAmbiance();
         hudRenderer.init();
 
-        // ... (OpenGL state setup: glClearColor, glEnable, lighting, fog... all unchanged) ...
-        // --- 💥 FLASHLIGHT REMOVAL: Keep background black for fog ---
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        // --- 💥 END MOD ---
+        // Initialize in-game UI
+        inGameUI = new InGameUI();
+        inGameUI.init();
 
+        // OpenGL state
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glEnable(GL_LIGHTING);
-
-        // --- 💥 FLASHLIGHT REMOVAL: Turn OFF the flashlight (GL_LIGHT0) ---
         glDisable(GL_LIGHT0);
-
         glEnable(GL_NORMALIZE);
         glShadeModel(GL_SMOOTH);
         glEnable(GL_COLOR_MATERIAL);
         glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 
-        // --- 💥 FLASHLIGHT REMOVAL: Make global ambient light BRIGHT ---
-        // Global ambient light (the "minimum" light everywhere)
-        float[] globalAmbient = {0.8f, 0.8f, 0.8f, 1.0f}; // Bright, uniform light
+        float[] globalAmbient = { 0.8f, 0.8f, 0.8f, 1.0f };
         glLightModelfv(GL_LIGHT_MODEL_AMBIENT, globalAmbient);
 
-        // --- 💥 FOG: Keep the fog enabled ---
         glEnable(GL_FOG);
-        glFogi(GL_FOG_MODE, GL_EXP2); // Exponential fog, very spooky
+        glFogi(GL_FOG_MODE, GL_EXP2);
+        glFogfv(GL_FOG_COLOR, new float[] { 0.0f, 0.0f, 0.0f, 1.0f });
+        glFogf(GL_FOG_DENSITY, 0.07f);
 
-        glFogfv(GL_FOG_COLOR, new float[]{0.0f, 0.0f, 0.0f, 1.0f}); // Black fog
-        glFogf(GL_FOG_DENSITY, 0.07f); // How thick the fog is (tweak this!)
-        // --- 💥 END MODS ---
-
-        startGame();
+        // Start in main menu state — show cursor
+        setCursorVisible(true);
+        gameState = GameState.MAIN_MENU;
     }
 
-    private void gameStateKeyCallback(long window, int key, int scode, int action, int mods) {
-        inputHandler.keyCallback.invoke(window, key, scode, action, mods);
+    // ============================================================
+    // MAIN LOOP — dispatches to the current state
+    // ============================================================
 
-        if (action == GLFW_RELEASE) {
-            if (key == GLFW_KEY_ESCAPE) {
-                stopGame("Game exited.", false);
-                glfwSetWindowShouldClose(window, true);
-            }
-            // --- 💥 NEW: Map Toggle Key (M) ---
-            else if (key == GLFW_KEY_M) {
-                isMapActive = !isMapActive;
-                // If map is active, clear other states that prevent movement
-                if (isMapActive) {
-                    isFreeCamActive = false;
-                    isAutoCollectActive = false;
-                    // Also clear player movement input immediately
-                    inputHandler.wPressed = false;
-                    inputHandler.sPressed = false;
-                    inputHandler.aPressed = false;
-                    inputHandler.dPressed = false;
-                    System.out.println("Full Map Toggled: " + isMapActive);
-                }
-            }
-            // --- 💥 END NEW ---
-            else if (key == GLFW_KEY_P) {
-                if (freeCamFeatureAvailable) {
-                    isFreeCamActive = !isFreeCamActive;
-                    System.out.println("Free Cam Toggled: " + isFreeCamActive);
-                    if (isFreeCamActive) {
-                        isAutoCollectActive = false;
-                        aiState = AiState.IDLE;
-                        inputHandler.wPressed = false;
-
-                        SwingUtilities.invokeLater(() -> {
-                            if (adminPanelUI != null) adminPanelUI.syncToGameState();
-                        });
-                    }
-                }
-            }
-            else if (key == GLFW_KEY_F2) {
-                if (adminPanelFeatureAvailable && adminPanelUI != null) {
-                    SwingUtilities.invokeLater(() -> {
-                        if (adminPanelUI.isVisible()) {
-                            adminPanelUI.setVisible(false);
-                        } else {
-                            adminPanelUI.syncToGameState(); // Sync *before* showing
-                            adminPanelUI.setVisible(true);
-                        }
-                    });
-                }
-            }
-        }
-    }
-
-
-    private void loop() {
+    private void mainLoop() {
         while (!glfwWindowShouldClose(window) && isRunning) {
-            updateGame();
-            render();
+            glfwPollEvents();
+
+            switch (gameState) {
+                case MAIN_MENU:
+                    updateMainMenu();
+                    renderMainMenu();
+                    break;
+                case PLAYING:
+                    updateGame();
+                    render();
+                    break;
+                case PAUSED:
+                    updatePaused();
+                    renderPaused();
+                    break;
+                case GAME_OVER:
+                    updateGameOver();
+                    renderGameOver();
+                    break;
+            }
 
             glfwSwapBuffers(window);
-            glfwPollEvents();
         }
     }
 
+    // ============================================================
+    // CURSOR MANAGEMENT
+    // ============================================================
+
+    private void setCursorVisible(boolean visible) {
+        if (visible) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        } else {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        }
+        cursorVisible = visible;
+    }
+
+    // ============================================================
+    // GLOBAL KEY CALLBACK
+    // ============================================================
+
+    private void globalKeyCallback(long window, int key, int scode, int action, int mods) {
+        // Forward to InputHandler for gameplay keys
+        if (inputHandler != null && gameState == GameState.PLAYING) {
+            inputHandler.keyCallback.invoke(window, key, scode, action, mods);
+        }
+
+        if (action == GLFW_RELEASE) {
+            switch (gameState) {
+                case MAIN_MENU:
+                    if (key == GLFW_KEY_ESCAPE) {
+                        isRunning = false;
+                        glfwSetWindowShouldClose(window, true);
+                    }
+                    break;
+
+                case PLAYING:
+                    if (key == GLFW_KEY_ESCAPE) {
+                        // Open pause menu instead of quitting
+                        transitionToPaused();
+                    } else if (key == GLFW_KEY_M) {
+                        isMapActive = !isMapActive;
+                        if (isMapActive) {
+                            isFreeCamActive = false;
+                            isAutoCollectActive = false;
+                            if (inputHandler != null) {
+                                inputHandler.wPressed = false;
+                                inputHandler.sPressed = false;
+                                inputHandler.aPressed = false;
+                                inputHandler.dPressed = false;
+                            }
+                        }
+                    } else if (key == GLFW_KEY_P) {
+                        if (freeCamFeatureAvailable) {
+                            isFreeCamActive = !isFreeCamActive;
+                            if (isFreeCamActive) {
+                                isAutoCollectActive = false;
+                                aiState = AiState.IDLE;
+                                if (inputHandler != null)
+                                    inputHandler.wPressed = false;
+                            }
+                        }
+                    } else if (key == GLFW_KEY_F2) {
+                        if (adminPanelFeatureAvailable && inGameUI != null) {
+                            inGameUI.toggleAdminPanel();
+                            if (inGameUI.isAdminPanelOpen()) {
+                                setCursorVisible(true);
+                                inGameUI.syncAdminState(isAutoCollectActive, isDebugLinesActive,
+                                        debugLinesFeatureAvailable,
+                                        groundR, groundG, groundB,
+                                        getPlayerPosition(), loadedTextures);
+                            } else {
+                                setCursorVisible(false);
+                                if (inputHandler != null)
+                                    inputHandler.resetMouse();
+                            }
+                        }
+                    }
+                    break;
+
+                case PAUSED:
+                    if (key == GLFW_KEY_ESCAPE) {
+                        // ESC again = resume
+                        transitionFromPaused();
+                    }
+                    break;
+
+                case GAME_OVER:
+                    if (key == GLFW_KEY_ESCAPE) {
+                        transitionToMainMenu();
+                    }
+                    break;
+            }
+        }
+    }
+
+    // ============================================================
+    // STATE TRANSITIONS
+    // ============================================================
+
+    private void transitionToMainMenu() {
+        gameState = GameState.MAIN_MENU;
+        setCursorVisible(true);
+        if (inGameUI != null)
+            inGameUI.closeAdminPanel();
+        bestScoreCache = ScoreManager.loadBestScore();
+        // Stop movement
+        if (inputHandler != null) {
+            inputHandler.wPressed = false;
+            inputHandler.sPressed = false;
+            inputHandler.aPressed = false;
+            inputHandler.dPressed = false;
+        }
+    }
+
+    private void transitionToPlaying(Difficulty diff) {
+        this.difficulty = diff;
+        if (this.difficulty == Difficulty.HARD) {
+            this.TOTAL_KEYS = 10;
+        } else {
+            this.TOTAL_KEYS = 3;
+        }
+
+        setCursorVisible(false);
+        if (inGameUI != null)
+            inGameUI.closeAdminPanel();
+        startGame();
+        gameState = GameState.PLAYING;
+    }
+
+    private void transitionToPaused() {
+        gameState = GameState.PAUSED;
+        setCursorVisible(true);
+        // Freeze player movement
+        if (inputHandler != null) {
+            inputHandler.wPressed = false;
+            inputHandler.sPressed = false;
+            inputHandler.aPressed = false;
+            inputHandler.dPressed = false;
+        }
+    }
+
+    private void transitionFromPaused() {
+        gameState = GameState.PLAYING;
+        setCursorVisible(false);
+        if (inputHandler != null)
+            inputHandler.resetMouse();
+        // Apply settings from pause menu
+        applyPauseMenuSettings();
+    }
+
+    private void applyPauseMenuSettings() {
+        if (inGameUI == null)
+            return;
+        // FOV
+        FIELD_OF_VIEW = inGameUI.getFieldOfView();
+        // Fog density
+        glFogf(GL_FOG_DENSITY, inGameUI.getFogDensity());
+        // Sensitivity is applied each frame in updateGame via InputHandler
+    }
+
+    private void transitionToGameOver(String message, boolean isWin) {
+        gameOverMessage = message;
+        gameOverIsWin = isWin;
+
+        long currentWins = bestScoreCache;
+        if (isWin) {
+            int winsToAdd = (this.difficulty == Difficulty.HARD) ? 5 : 1;
+            currentWins += winsToAdd;
+            if (currentWins > bestScoreCache) {
+                ScoreManager.saveBestScore(currentWins);
+                bestScoreCache = currentWins;
+            }
+        }
+
+        if (inGameUI != null) {
+            inGameUI.setGameOverState(message, bestScoreCache);
+            inGameUI.closeAdminPanel();
+        }
+
+        setCursorVisible(true);
+        gameState = GameState.GAME_OVER;
+    }
+
+    // ============================================================
+    // MAIN MENU STATE
+    // ============================================================
+
+    private void updateMainMenu() {
+        if (inGameUI == null)
+            return;
+
+        Difficulty pick = inGameUI.getSelectedDifficulty();
+        if (pick != null) {
+            transitionToPlaying(pick);
+            return;
+        }
+
+        if (inGameUI.isQuitRequested()) {
+            isRunning = false;
+            glfwSetWindowShouldClose(window, true);
+        }
+    }
+
+    // ============================================================
+    // PAUSED STATE
+    // ============================================================
+
+    private void updatePaused() {
+        if (inGameUI == null)
+            return;
+
+        if (inGameUI.isPauseResumeRequested()) {
+            transitionFromPaused();
+            return;
+        }
+
+        if (inGameUI.isPauseQuitToMenuRequested()) {
+            transitionToMainMenu();
+        }
+    }
+
+    private void renderPaused() {
+        // Render the 3D scene frozen behind the overlay
+        int width, height;
+        try (MemoryStack stack = stackPush()) {
+            IntBuffer wBuf = stack.mallocInt(1);
+            IntBuffer hBuf = stack.mallocInt(1);
+            glfwGetWindowSize(window, wBuf, hBuf);
+            width = wBuf.get(0);
+            height = hBuf.get(0);
+        }
+        glViewport(0, 0, width, height);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // Frozen 3D scene
+        if (world != null && player != null) {
+            glMatrixMode(GL_PROJECTION);
+            glLoadIdentity();
+            perspective(FIELD_OF_VIEW, (float) width / height, NEAR_PLANE, FAR_PLANE);
+            glMatrixMode(GL_MODELVIEW);
+            glLoadIdentity();
+            player.setupCamera();
+
+            synchronized (world.getStaticObjects()) {
+                for (GameObject obj : world.getStaticObjects()) {
+                    obj.render();
+                }
+            }
+            keyManager.render();
+        }
+
+        // 2D overlay
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glLoadIdentity();
+        glOrtho(0.0, width, height, 0.0, -1.0, 1.0);
+        glMatrixMode(GL_MODELVIEW);
+        glPushMatrix();
+        glLoadIdentity();
+        glDisable(GL_LIGHTING);
+        glDisable(GL_FOG);
+        glDisable(GL_DEPTH_TEST);
+
+        inGameUI.renderPauseMenu(width, height);
+
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_LIGHTING);
+        glEnable(GL_FOG);
+        glPopMatrix();
+        glMatrixMode(GL_PROJECTION);
+        glPopMatrix();
+        glMatrixMode(GL_MODELVIEW);
+    }
+
+    // ============================================================
+    // MAIN MENU STATE
+    // ============================================================
+
+    private void renderMainMenu() {
+        int width, height;
+        try (MemoryStack stack = stackPush()) {
+            IntBuffer wBuf = stack.mallocInt(1);
+            IntBuffer hBuf = stack.mallocInt(1);
+            glfwGetWindowSize(window, wBuf, hBuf);
+            width = wBuf.get(0);
+            height = hBuf.get(0);
+        }
+        glViewport(0, 0, width, height);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // Setup 2D ortho
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(0.0, width, height, 0.0, -1.0, 1.0);
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+
+        // Disable 3D stuff for menu
+        glDisable(GL_LIGHTING);
+        glDisable(GL_FOG);
+        glDisable(GL_DEPTH_TEST);
+
+        inGameUI.renderMainMenu(width, height);
+
+        // Re-enable for gameplay
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_LIGHTING);
+        glEnable(GL_FOG);
+    }
+
+    // ============================================================
+    // GAME OVER STATE
+    // ============================================================
+
+    private void updateGameOver() {
+        if (inGameUI != null && inGameUI.isGameOverReturnToMenu()) {
+            transitionToMainMenu();
+        }
+    }
+
+    private void renderGameOver() {
+        // Render the last game frame as background, then overlay
+        int width, height;
+        try (MemoryStack stack = stackPush()) {
+            IntBuffer wBuf = stack.mallocInt(1);
+            IntBuffer hBuf = stack.mallocInt(1);
+            glfwGetWindowSize(window, wBuf, hBuf);
+            width = wBuf.get(0);
+            height = hBuf.get(0);
+        }
+        glViewport(0, 0, width, height);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // Render 3D scene frozen
+        if (world != null && player != null) {
+            glMatrixMode(GL_PROJECTION);
+            glLoadIdentity();
+            perspective(FIELD_OF_VIEW, (float) width / height, NEAR_PLANE, FAR_PLANE);
+            glMatrixMode(GL_MODELVIEW);
+            glLoadIdentity();
+            player.setupCamera();
+
+            synchronized (world.getStaticObjects()) {
+                for (GameObject obj : world.getStaticObjects()) {
+                    obj.render();
+                }
+            }
+            keyManager.render();
+        }
+
+        // 2D overlay
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glLoadIdentity();
+        glOrtho(0.0, width, height, 0.0, -1.0, 1.0);
+        glMatrixMode(GL_MODELVIEW);
+        glPushMatrix();
+        glLoadIdentity();
+        glDisable(GL_LIGHTING);
+        glDisable(GL_FOG);
+        glDisable(GL_DEPTH_TEST);
+
+        inGameUI.renderGameOver(width, height);
+
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_LIGHTING);
+        glEnable(GL_FOG);
+        glPopMatrix();
+        glMatrixMode(GL_PROJECTION);
+        glPopMatrix();
+        glMatrixMode(GL_MODELVIEW);
+    }
+
+    // ============================================================
+    // PLAYING STATE — GAME LOGIC
+    // ============================================================
+
     public void startGame() {
-        isRunning = true;
         currentScore = 0;
         bestScoreCache = ScoreManager.loadBestScore();
 
-        // --- World Gen ---
-        // --- MODIFIED: Pass new texture IDs to world generator ---
+        // World Gen
         world = worldLoader.generateWorld(wallTextureID, orbTextureID, woodTextureID, sheetsTextureID);
         this.escapeDoor = world.getEscapeDoor();
         this.winTrigger = world.getWinTrigger();
 
-        // --- Player & Keys ---
+        // Player & Keys
         player = new Player(0, 1.5f, 0);
+        // Create a new InputHandler for this session
+        inputHandler = new InputHandler(window);
         inputHandler.resetMouse();
-        // --- MODIFIED: Pass TOTAL_KEYS to KeyManager ---
         keyManager.initializeKeys(world.getAllRooms(), world.getStaticObjects(), TOTAL_KEYS);
 
         keysCollected = 0;
         adminKeys.clear();
         horrorLevel = 0.0f;
 
-        // --- 💥FIX: DIY Pathfinding Grid Build ---
+        // Pathfinding
         System.out.println("[GamePanel] Building DIY Pathfinding Grid for new world...");
         long startTime = System.currentTimeMillis();
         pathfinder = new PathfindingManager();
-        pathfinder.buildGrid(world); // Build grid based on the world
+        pathfinder.buildGrid(world);
         long endTime = System.currentTimeMillis();
         System.out.println("[GamePanel] Pathfinding Grid built in " + (endTime - startTime) + " ms.");
 
-        // Reset AI state
         aiPath = null;
         aiPathIndex = 0;
         aiState = AiState.IDLE;
-        aiFailedPathTimer = 0.0f; // 💥FIX: Reset timer
+        aiFailedPathTimer = 0.0f;
         isAutoCollectActive = false;
-        // --- 💥END FIX ---
+        isFreeCamActive = false;
+        isMapActive = false;
 
-        // --- 💥FIX: RE-ADD OBJECTIVE RESET ---
+        // Objective
         allKeysCollectedMessageTriggered = false;
         popupMessage = "";
         popupMessageTimer = 0.0f;
         hotColdText = "";
-        updateObjectiveText(); // Set initial objective
-        // --- 💥END FIX ---
+        updateObjectiveText();
+
+        // Start ambiance
+        if (soundManager != null) {
+            soundManager.loadAndLoopAmbiance();
+        }
     }
 
-    // --- 💥FIX: RE-ADD OBJECTIVE HELPER ---
-    /**
-     * Helper method to update the objective text based on game state.
-     */
     private void updateObjectiveText() {
         if (keysCollected < TOTAL_KEYS) {
             currentObjectiveText = "Objective: Find all keys (" + keysCollected + " / " + TOTAL_KEYS + ")";
@@ -375,102 +713,109 @@ public class GamePanel extends Thread {
             currentObjectiveText = "Objective: Find the maze exit!";
         }
     }
-    // --- 💥END FIX ---
 
     private void updateGame() {
-        // ... (player.update, keyManager.update logic is unchanged) ...
-        // Player update now includes AI movement *or* player movement
-        // --- 💥 MODIFIED: Disable player update if map is full screen 💥 ---
+        // Detect admin panel close-button usage (restores cursor/movement)
+        if (inGameUI != null && inGameUI.wasAdminPanelJustClosed()) {
+            setCursorVisible(false);
+            if (inputHandler != null)
+                inputHandler.resetMouse();
+        }
+
+        // Apply dynamic settings from pause menu
+        if (inGameUI != null) {
+            // Sensitivity
+            inputHandler.setSensitivity(inGameUI.getSensitivity());
+            // FOV & fog are applied on resume, but also continuously for live preview feel
+            FIELD_OF_VIEW = inGameUI.getFieldOfView();
+            glFogf(GL_FOG_DENSITY, inGameUI.getFogDensity());
+        }
+
         if (!isMapActive) {
-            player.update(inputHandler, world, isFreeCamActive || isAutoCollectActive);
+            // Don't process player movement if admin panel is open with cursor
+            if (!cursorVisible) {
+                player.update(inputHandler, world, isFreeCamActive || isAutoCollectActive);
+            }
         }
 
         // Key collection logic
         keyManager.update(player);
-        // 💥FIX: Check for key collection *changes* to update objective text
         int newKeysCollected = keyManager.getKeysCollected();
         if (newKeysCollected != keysCollected) {
             keysCollected = newKeysCollected;
-            updateObjectiveText(); // Update text when count changes
+            updateObjectiveText();
         }
-        // --- 💥END FIX ---
 
-        // --- 💥FIX: RE-ADD POPUP AND HOT/COLD LOGIC ---
-        // Update popup timer
+        // Popup timer
         if (popupMessageTimer > 0) {
-            popupMessageTimer -= FRAME_TIME_ESTIMATE; // HACK: Assumes 60fps
+            popupMessageTimer -= FRAME_TIME_ESTIMATE;
             if (popupMessageTimer <= 0) {
-                popupMessage = ""; // Clear message when timer expires
+                popupMessage = "";
             }
         }
 
         if (keysCollected == TOTAL_KEYS) {
-            // Trigger popup message ONCE
             if (!allKeysCollectedMessageTriggered) {
                 allKeysCollectedMessageTriggered = true;
                 popupMessage = "NEW OBJECTIVE: FIND THE EXIT!";
                 popupMessageTimer = POPUP_MESSAGE_DURATION;
             }
 
-            // Open escape door
             if (escapeDoor != null && escapeDoor.isCollidable()) {
                 escapeDoor.setCollidable(false);
                 escapeDoor.setRendered(false);
-
-                // --- 💥💥💥 THE FIX 💥💥💥 ---
-                // Tell the pathfinder the door is open so the grid is no longer blocked!
                 if (pathfinder != null) {
                     pathfinder.openDoorInGrid(escapeDoor);
                 }
-                // --- 💥💥💥 END FIX 💥💥💥 ---
             }
 
-            // Update Hot/Cold text
+            // Hot/Cold
             if (winTrigger != null && player != null) {
                 float dx = winTrigger.getPosX() - player.getPosX();
                 float dz = winTrigger.getPosZ() - player.getPosZ();
                 float distanceSq = (dx * dx) + (dz * dz);
 
-                if (distanceSq < 100.0f) { hotColdText = "Burning Hot!"; }
-                else if (distanceSq < 400.0f) { hotColdText = "Hot"; }
-                else if (distanceSq < 1600.0f) { hotColdText = "Warm"; }
-                else if (distanceSq < 4900.0f) { hotColdText = "Cold"; }
-                else { hotColdText = "Freezing"; }
+                if (distanceSq < 100.0f) {
+                    hotColdText = "Burning Hot!";
+                } else if (distanceSq < 400.0f) {
+                    hotColdText = "Hot";
+                } else if (distanceSq < 1600.0f) {
+                    hotColdText = "Warm";
+                } else if (distanceSq < 4900.0f) {
+                    hotColdText = "Cold";
+                } else {
+                    hotColdText = "Freezing";
+                }
             }
         } else {
-            hotColdText = ""; // Not active until all keys are found
+            hotColdText = "";
         }
-        // --- 💥END FIX ---
 
-
-        // Win condition is the same
+        // Win condition
         if (winTrigger != null) {
             float playerBodyY = player.getPosY() - player.getPlayerHalfHeight();
             float playerRadius = 0.3f;
-            if (winTrigger.isColliding(player.getPosX(), playerBodyY, player.getPosZ(), playerRadius, player.getPlayerHalfHeight())) {
-                stopGame("YOU ESCAPED! Maze Champion! You win!", true);
-                glfwSetWindowShouldClose(window, true);
+            if (winTrigger.isColliding(player.getPosX(), playerBodyY, player.getPosZ(), playerRadius,
+                    player.getPlayerHalfHeight())) {
+                transitionToGameOver("YOU ESCAPED! Maze Champion! You win!", true);
                 return;
             }
         }
 
-        // ... (AI logic: aiFailedPathTimer, updateAutoCollectAI... all unchanged) ...
-        // --- 💥FIX: Tick AI timer ---
+        // AI timer
         if (aiFailedPathTimer > 0) {
             aiFailedPathTimer -= FRAME_TIME_ESTIMATE;
         }
 
-        // --- 💥FIX: DIY A* AI LOGIC ---
+        // AI logic
         if (isAutoCollectActive) {
             updateAutoCollectAI();
         } else {
-            // If AI is turned off, reset its state
             aiState = AiState.IDLE;
             aiPath = null;
         }
-        // --- 💥END FIX ---
 
-        // Horror logic is the same
+        // Horror
         if (!isFreeCamActive) {
             Room currentRoom = getPlayerCurrentRoom();
             if (currentRoom != null && currentRoom.getType() == RoomType.COURTYARD) {
@@ -488,24 +833,17 @@ public class GamePanel extends Thread {
         }
     }
 
-    /**
-     * 💥FIX: State machine for the Auto-Collect DIY AI.
-     * NOW WITH SPAM-PREVENTION (PATH_FAILED state).
-     */
     private void updateAutoCollectAI() {
         float pX = player.getPosX();
         float pZ = player.getPosZ();
 
         switch (aiState) {
             case IDLE: {
-                // 💥FIX: Check if we are on cooldown from a failed path
                 if (aiFailedPathTimer > 0) {
                     inputHandler.wPressed = false;
-                    break; // Don't try to find a new path yet
+                    break;
                 }
 
-                // AI is idle, it needs a new task.
-                // 1. Find a target.
                 float targetX, targetZ;
                 boolean hasTarget = false;
 
@@ -514,29 +852,21 @@ public class GamePanel extends Thread {
                     targetX = nearestKey.x;
                     targetZ = nearestKey.z;
                     hasTarget = true;
-                    System.out.println("[AI] New target: Key at (" + targetX + ", " + targetZ + ")");
                 } else if (keysCollected == TOTAL_KEYS && winTrigger != null) {
                     targetX = winTrigger.getPosX();
                     targetZ = winTrigger.getPosZ();
                     hasTarget = true;
-                    System.out.println("[AI] New target: Win Trigger at (" + targetX + ", " + targetZ + ")");
                 } else {
-                    // No keys, no exit? Stop.
                     inputHandler.wPressed = false;
                     return;
                 }
 
-                // 2. Find a path to the target.
                 if (hasTarget) {
                     aiPath = pathfinder.findPath(pX, pZ, targetX, targetZ);
                     if (aiPath != null && aiPath.size() > 1) {
-                        // Path found! Start following at the next node (index 1)
                         aiPathIndex = 1;
                         aiState = AiState.FOLLOWING_PATH;
-                        System.out.println("[AI] Path found. State -> FOLLOWING_PATH");
                     } else {
-                        // 💥FIX: Path failed! Go to new state.
-                        System.err.println("[AI] No path found to target. Entering FAILED state.");
                         aiPath = null;
                         aiState = AiState.PATH_FAILED;
                         aiFailedPathTimer = AI_RETRY_COOLDOWN;
@@ -546,72 +876,54 @@ public class GamePanel extends Thread {
             }
 
             case FOLLOWING_PATH: {
-                // AI is following a pre-calculated path.
                 if (aiPath == null || aiPathIndex >= aiPath.size()) {
-                    // We either finished the path or it's invalid. Go back to IDLE.
                     aiState = AiState.IDLE;
                     inputHandler.wPressed = false;
-                    System.out.println("[AI] Path finished or invalid. State -> IDLE");
                     break;
                 }
 
-                // Get the next node in the path
                 PathNode targetNode = aiPath.get(aiPathIndex);
                 float targetX = targetNode.worldX;
                 float targetZ = targetNode.worldZ;
 
-                // Calculate vector to the target node
                 float dx = targetX - pX;
                 float dz = targetZ - pZ;
 
-                // 💥FIX: Stricter "close enough" check. Radius is 0.5f (0.25f squared)
-                // This stops the AI from cutting corners.
                 if (dx * dx + dz * dz < 0.25f) {
-                    // We are "at" the node. Move to the next one.
                     aiPathIndex++;
-                    System.out.println("[AI] Reached path node. Moving to index " + aiPathIndex);
-                    // Don't move for one frame, to allow turning
                     inputHandler.wPressed = false;
                 } else {
-                    // 💥FIX: Smooth Turning Logic
                     float angleToTarget = (float) Math.toDegrees(Math.atan2(dx, -dz));
                     float currentYaw = inputHandler.yaw;
 
-                    // Find the shortest angle difference
                     float diff = angleToTarget - currentYaw;
-                    while (diff < -180) diff += 360;
-                    while (diff > 180) diff -= 360;
+                    while (diff < -180)
+                        diff += 360;
+                    while (diff > 180)
+                        diff -= 360;
 
-                    // Define a turn speed (e.g., 10 degrees per frame)
                     float turnSpeed = 10.0f;
 
                     if (Math.abs(diff) < turnSpeed) {
-                        // If we're close, snap to the target angle
                         inputHandler.yaw = angleToTarget;
                     } else {
-                        // Otherwise, turn smoothly
                         inputHandler.yaw += Math.signum(diff) * turnSpeed;
                     }
 
-                    // Normalize yaw
                     inputHandler.yaw = (inputHandler.yaw + 360) % 360;
 
-                    // Only move forward if we are generally facing the target
                     if (Math.abs(diff) < 45) {
                         inputHandler.wPressed = true;
                     } else {
-                        inputHandler.wPressed = false; // Stop to turn
+                        inputHandler.wPressed = false;
                     }
                 }
                 break;
             }
 
-            // 💥FIX: New state to handle failed paths and prevent spam
             case PATH_FAILED: {
-                // We are waiting for the timer to run out.
                 inputHandler.wPressed = false;
                 if (aiFailedPathTimer <= 0) {
-                    System.out.println("[AI] Cooldown finished. State -> IDLE");
                     aiState = AiState.IDLE;
                 }
                 break;
@@ -619,11 +931,7 @@ public class GamePanel extends Thread {
         }
     }
 
-    /**
-     * Helper method to find which room the player is currently in.
-     */
     private Room getPlayerCurrentRoom() {
-        // ... (This method is unchanged) ...
         if (world == null || player == null) {
             return null;
         }
@@ -637,9 +945,11 @@ public class GamePanel extends Thread {
         return null;
     }
 
+    // ============================================================
+    // PLAYING STATE — RENDERING
+    // ============================================================
 
     private void render() {
-        // ... (GL setup, projection, modelview... all unchanged) ...
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         int width, height;
@@ -652,25 +962,16 @@ public class GamePanel extends Thread {
         }
         glViewport(0, 0, width, height);
 
-        // --- Setup Projection ---
+        // 3D Projection
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
         perspective(FIELD_OF_VIEW, (float) width / height, NEAR_PLANE, FAR_PLANE);
 
-        // --- Setup ModelView ---
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
-
-
-        // --- 💥💥💥 FLASHLIGHT REMOVAL 💥💥💥 ---
-        // We deleted the flashlight logic block.
-        // We just set up the camera, and that's it.
-        // The global ambient light from init() does all the work.
         player.setupCamera();
-        // --- 💥💥💥 END FIX 💥💥💥 ---
 
-
-        // Render world objects
+        // Render world
         synchronized (world.getStaticObjects()) {
             for (GameObject obj : world.getStaticObjects()) {
                 obj.render();
@@ -684,11 +985,10 @@ public class GamePanel extends Thread {
             keyManager.renderKey(key);
         }
 
-        // --- 💥FIX: Pass 'world' object to DebugRenderer ---
+        // Debug renderer
         debugRenderer.render(isDebugLinesActive, isAutoCollectActive, player, keyManager, world, pathfinder);
-        // --- 💥END FIX ---
 
-        // 2D HUD rendering
+        // 2D HUD
         glMatrixMode(GL_PROJECTION);
         glPushMatrix();
         glLoadIdentity();
@@ -698,14 +998,67 @@ public class GamePanel extends Thread {
         glLoadIdentity();
 
         long displayBest = bestScoreCache;
-        // --- 💥 MODIFIED: Pass isMapActive to HudRenderer.render (20 args) 💥 ---
-        // --- NOTE: This call is correct, TOTAL_KEYS is a field read by this method ---
         hudRenderer.render(width, height, keysCollected, TOTAL_KEYS, displayBest,
                 isFreeCamActive, isAutoCollectActive, isDebugLinesActive,
                 adminPanelFeatureAvailable, horrorLevel,
                 currentObjectiveText, popupMessage, popupMessageTimer, hotColdText,
-                pathfinder, player, keyManager, winTrigger, world, isMapActive); // ADDED isMapActive
-        // --- 💥 END MODIFIED ---
+                pathfinder, player, keyManager, winTrigger, world, isMapActive);
+
+        // Render admin panel overlay if open
+        if (inGameUI != null && inGameUI.isAdminPanelOpen()) {
+            glDisable(GL_LIGHTING);
+            glDisable(GL_FOG);
+            glDisable(GL_DEPTH_TEST);
+
+            inGameUI.renderAdminPanel(width, height, new InGameUI.AdminCallback() {
+                @Override
+                public void onToggleAutoCollect(boolean active) {
+                    setAutoCollectActive(active);
+                }
+
+                @Override
+                public void onToggleDebugLines(boolean active) {
+                    isDebugLinesActive = active;
+                }
+
+                @Override
+                public void onSetGroundColor(float r, float g, float b) {
+                    groundR = r;
+                    groundG = g;
+                    groundB = b;
+                }
+
+                @Override
+                public void onSpawnObject(String shape, String textureName) {
+                    int textureId = 0;
+                    if (textureName != null && !textureName.equals("NONE (Color)")) {
+                        textureId = loadedTextures.getOrDefault(textureName, 0);
+                    }
+                    addObjectAtPlayerPosition(shape, textureId);
+                }
+
+                @Override
+                public void onTeleport(float x, float y, float z) {
+                    teleportPlayer(x, y, z);
+                }
+
+                @Override
+                public void onCopyCoords() {
+                    float[] pos = getPlayerPosition();
+                    String coords = String.format("(%.2f, %.2f, %.2f)", pos[0], pos[1], pos[2]);
+                    try {
+                        StringSelection stringSelection = new StringSelection(coords);
+                        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(stringSelection, null);
+                    } catch (Exception e) {
+                        System.err.println("Failed to copy to clipboard: " + e.getMessage());
+                    }
+                }
+            });
+
+            glEnable(GL_DEPTH_TEST);
+            glEnable(GL_LIGHTING);
+            glEnable(GL_FOG);
+        }
 
         glPopMatrix();
         glMatrixMode(GL_PROJECTION);
@@ -714,7 +1067,6 @@ public class GamePanel extends Thread {
     }
 
     private void perspective(float fov, float aspect, float near, float far) {
-        // ... (This method is unchanged) ...
         float yMax = near * (float) Math.tan(Math.toRadians(fov / 2.0));
         float yMin = -yMax;
         float xMax = yMax * aspect;
@@ -722,10 +1074,13 @@ public class GamePanel extends Thread {
         glFrustum(xMin, xMax, yMin, yMax, near, far);
     }
 
+    // ============================================================
+    // OBJECT SPAWNING
+    // ============================================================
+
     public void addObjectAtPlayerPosition(String shapeType, int textureId) {
-        // Get player position, pY will be the floor level (0.0)
         float pX = player.getPosX();
-        float pY = player.getPosY() - player.PLAYER_EYE_HEIGHT; //
+        float pY = player.getPosY() - player.PLAYER_EYE_HEIGHT;
         float pZ = player.getPosZ();
 
         synchronized (world.getStaticObjects()) {
@@ -741,7 +1096,6 @@ public class GamePanel extends Thread {
                     break;
                 }
                 case "TABLE": {
-                    // This logic uses pX/pZ as the center and 0.0f as the floor
                     float tableX = pX;
                     float tableZ = pZ;
                     float TABLE_TOP_Y = 0.8f;
@@ -752,75 +1106,65 @@ public class GamePanel extends Thread {
                     float LEG_SIZE = 0.15f;
                     float LEG_OFFSET_X = (TABLE_TOP_W / 2.0f) - (LEG_SIZE / 2.0f);
                     float LEG_OFFSET_Z = (TABLE_TOP_D / 2.0f) - (LEG_SIZE / 2.0f);
-                    // Use a default color if textureId is 0, or if specific textures are requested, use that ID.
-                    int tableTextureId = (textureId != 0) ? textureId : loadedTextures.getOrDefault("wood_texture.png", 0);
+                    int tableTextureId = (textureId != 0) ? textureId
+                            : loadedTextures.getOrDefault("wood_texture.png", 0);
 
-                    world.getStaticObjects().add(new GameObject(ShapeType.CUBE, tableX, TABLE_TOP_Y - (TABLE_TOP_H / 2.0f), tableZ,
-                            TABLE_TOP_W, TABLE_TOP_H, TABLE_TOP_D, 0.5f, 0.3f, 0.0f));
-                    world.getStaticObjects().add(new GameObject(ShapeType.CUBE, tableX - LEG_OFFSET_X, 0.0f, tableZ - LEG_OFFSET_Z,
-                            LEG_SIZE, LEG_HEIGHT, LEG_SIZE, 0.5f, 0.3f, 0.0f));
-                    world.getStaticObjects().add(new GameObject(ShapeType.CUBE, tableX + LEG_OFFSET_X, 0.0f, tableZ - LEG_OFFSET_Z,
-                            LEG_SIZE, LEG_HEIGHT, LEG_SIZE, 0.5f, 0.3f, 0.0f));
-                    world.getStaticObjects().add(new GameObject(ShapeType.CUBE, tableX - LEG_OFFSET_X, 0.0f, tableZ + LEG_OFFSET_Z,
-                            LEG_SIZE, LEG_HEIGHT, LEG_SIZE, 0.5f, 0.3f, 0.0f));
-                    world.getStaticObjects().add(new GameObject(ShapeType.CUBE, tableX + LEG_OFFSET_X, 0.0f, tableZ + LEG_OFFSET_Z,
-                            LEG_SIZE, LEG_HEIGHT, LEG_SIZE, 0.5f, 0.3f, 0.0f));
+                    world.getStaticObjects()
+                            .add(new GameObject(ShapeType.CUBE, tableX, TABLE_TOP_Y - (TABLE_TOP_H / 2.0f), tableZ,
+                                    TABLE_TOP_W, TABLE_TOP_H, TABLE_TOP_D, 0.5f, 0.3f, 0.0f));
+                    world.getStaticObjects()
+                            .add(new GameObject(ShapeType.CUBE, tableX - LEG_OFFSET_X, 0.0f, tableZ - LEG_OFFSET_Z,
+                                    LEG_SIZE, LEG_HEIGHT, LEG_SIZE, 0.5f, 0.3f, 0.0f));
+                    world.getStaticObjects()
+                            .add(new GameObject(ShapeType.CUBE, tableX + LEG_OFFSET_X, 0.0f, tableZ - LEG_OFFSET_Z,
+                                    LEG_SIZE, LEG_HEIGHT, LEG_SIZE, 0.5f, 0.3f, 0.0f));
+                    world.getStaticObjects()
+                            .add(new GameObject(ShapeType.CUBE, tableX - LEG_OFFSET_X, 0.0f, tableZ + LEG_OFFSET_Z,
+                                    LEG_SIZE, LEG_HEIGHT, LEG_SIZE, 0.5f, 0.3f, 0.0f));
+                    world.getStaticObjects()
+                            .add(new GameObject(ShapeType.CUBE, tableX + LEG_OFFSET_X, 0.0f, tableZ + LEG_OFFSET_Z,
+                                    LEG_SIZE, LEG_HEIGHT, LEG_SIZE, 0.5f, 0.3f, 0.0f));
                     break;
                 }
                 case "KEY": {
                     adminKeys.add(new Key(pX, pY, pZ));
                     break;
                 }
-                // --- 💥 NEW CASE TO SPAWN BEDS 💥 ---
                 case "BED": {
-                    // Logic copied from WorldLoader.generateBedForRoom
-                    // We use pX and pZ as the center.
                     float bedX = pX;
                     float bedZ = pZ;
-
-                    // --- Bed Dimensions (NOTE: Now rotated 90 degrees: LENGTH is X, WIDTH is Z) ---
-                    float BED_WIDTH = 2.5f;  // Z-axis (depth)
-                    float BED_LENGTH = 3.0f; // X-axis (width)
-                    float BED_HEIGHT = 0.4f; // Y-axis (mattress)
+                    float BED_WIDTH = 2.5f;
+                    float BED_LENGTH = 3.0f;
+                    float BED_HEIGHT = 0.4f;
                     float LEG_HEIGHT = 0.35f;
                     float LEG_SIZE = 0.15f;
                     float HEADBOARD_HEIGHT = 1.2f;
                     float HEADBOARD_THICKNESS = 0.1f;
-
-                    // Offsets for legs
                     float legOffsetX = (BED_LENGTH / 2.0f) - (LEG_SIZE / 2.0f);
                     float legOffsetZ = (BED_WIDTH / 2.0f) - (LEG_SIZE / 2.0f);
-
-                    // --- Get specific textures ---
                     int woodTex = loadedTextures.getOrDefault("wood_texture.png", 0);
                     int sheetsTex = loadedTextures.getOrDefault("sheets_texture.png", 0);
 
-
-                    // --- 1. Create Legs (Cubes, Collidable, Wood Texture) ---
-                    world.getStaticObjects().add(new GameObject(ShapeType.CUBE, bedX - legOffsetX, 0.0f, bedZ - legOffsetZ,
-                            LEG_SIZE, LEG_HEIGHT, LEG_SIZE, woodTex));
-                    world.getStaticObjects().add(new GameObject(ShapeType.CUBE, bedX + legOffsetX, 0.0f, bedZ - legOffsetZ,
-                            LEG_SIZE, LEG_HEIGHT, LEG_SIZE, woodTex));
-                    world.getStaticObjects().add(new GameObject(ShapeType.CUBE, bedX - legOffsetX, 0.0f, bedZ + legOffsetZ,
-                            LEG_SIZE, LEG_HEIGHT, LEG_SIZE, woodTex));
-                    world.getStaticObjects().add(new GameObject(ShapeType.CUBE, bedX + legOffsetX, 0.0f, bedZ + legOffsetZ,
-                            LEG_SIZE, LEG_HEIGHT, LEG_SIZE, woodTex));
-
-                    // --- 2. Create Mattress (Cube, Collidable, Sheets Texture) ---
-                    // Scale is [BED_LENGTH] wide (X) and [BED_WIDTH] deep (Z)
+                    world.getStaticObjects()
+                            .add(new GameObject(ShapeType.CUBE, bedX - legOffsetX, 0.0f, bedZ - legOffsetZ,
+                                    LEG_SIZE, LEG_HEIGHT, LEG_SIZE, woodTex));
+                    world.getStaticObjects()
+                            .add(new GameObject(ShapeType.CUBE, bedX + legOffsetX, 0.0f, bedZ - legOffsetZ,
+                                    LEG_SIZE, LEG_HEIGHT, LEG_SIZE, woodTex));
+                    world.getStaticObjects()
+                            .add(new GameObject(ShapeType.CUBE, bedX - legOffsetX, 0.0f, bedZ + legOffsetZ,
+                                    LEG_SIZE, LEG_HEIGHT, LEG_SIZE, woodTex));
+                    world.getStaticObjects()
+                            .add(new GameObject(ShapeType.CUBE, bedX + legOffsetX, 0.0f, bedZ + legOffsetZ,
+                                    LEG_SIZE, LEG_HEIGHT, LEG_SIZE, woodTex));
                     world.getStaticObjects().add(new GameObject(ShapeType.CUBE, bedX, LEG_HEIGHT, bedZ,
                             BED_LENGTH, BED_HEIGHT, BED_WIDTH, sheetsTex));
-
-                    // --- 3. Create Headboard (Cube, Collidable, Wood Texture) ---
-                    // Sits at the "back" (positive Z) of the bed
                     float headboardZ = bedZ + (BED_WIDTH / 2.0f) + (HEADBOARD_THICKNESS / 2.0f);
                     world.getStaticObjects().add(new GameObject(ShapeType.CUBE, bedX, LEG_HEIGHT, headboardZ,
                             BED_LENGTH, HEADBOARD_HEIGHT, HEADBOARD_THICKNESS, woodTex));
                     break;
                 }
-                // --- 💥 NEW CASE TO SPAWN TREES 💥 ---
                 case "TREE": {
-                    // Dimensions from WorldLoader
                     float TRUNK_HEIGHT = 4.0f;
                     float TRUNK_WIDTH = 0.4f;
                     float LEAF_RADIUS = 2.0f;
@@ -829,155 +1173,150 @@ public class GamePanel extends Thread {
                             ShapeType.CUBE,
                             pX, 0.0f, pZ,
                             TRUNK_WIDTH, TRUNK_HEIGHT, TRUNK_WIDTH,
-                            0.5f, 0.3f, 0.0f, // Brown color
-                            true, true
-                    );
-
+                            0.5f, 0.3f, 0.0f,
+                            true, true);
                     float leafY = TRUNK_HEIGHT;
                     GameObject leaves = new GameObject(
                             ShapeType.SPHERE,
                             pX, leafY, pZ,
                             LEAF_RADIUS, LEAF_RADIUS, LEAF_RADIUS,
-                            0.0f, 0.7f, 0.0f, // Green color
-                            false, true
-                    );
-
+                            0.0f, 0.7f, 0.0f,
+                            false, true);
                     world.getStaticObjects().add(trunk);
                     world.getStaticObjects().add(leaves);
                     break;
                 }
-                // --- 💥 NEW CASE TO SPAWN ESCAPE DOOR 💥 ---
                 case "ESCAPE_DOOR": {
-                    // Default door dimensions (tunnel width/height)
                     float doorW = 4.0f;
                     float doorH = 3.0f;
                     float doorD = 0.1f;
-
-                    // Color: Same as escape door (Brownish)
                     GameObject door = new GameObject(
                             ShapeType.CUBE,
                             pX, 0.0f, pZ,
                             doorW, doorH, doorD,
                             0.5f, 0.3f, 0.0f,
-                            true, true
-                    );
+                            true, true);
                     world.getStaticObjects().add(door);
                     break;
                 }
-                // --- 💥 END NEW CASES 💥 ---
                 default:
-                    // If a shape is spawned with a texture, use the provided textureId
                     GameObject newObj = new GameObject(ShapeType.CUBE, pX, pY, pZ, 1.0f, 1.0f, 1.0f, textureId);
                     world.getStaticObjects().add(newObj);
                     break;
             }
         }
-        System.out.println("Spawned " + shapeType + " with Texture ID " + textureId + " at (" + pX + ", " + pY + ", " + pZ + ")");
+        System.out.println(
+                "Spawned " + shapeType + " with Texture ID " + textureId + " at (" + pX + ", " + pY + ", " + pZ + ")");
     }
+
+    // ============================================================
+    // CLEANUP
+    // ============================================================
 
     public void stopGame() {
-        stopGame("Game exited.", false);
-    }
-
-    private void stopGame(String message, boolean isWin) {
-        // ... (This part is mostly unchanged) ...
-        if (!isRunning) return;
         isRunning = false;
-        if (adminPanelUI != null) {
-            SwingUtilities.invokeLater(() -> adminPanelUI.dispose());
-        }
-        long currentWins = bestScoreCache;
-        if (isWin) {
-            // --- MODIFICATION: Add wins based on difficulty ---
-            int winsToAdd = (this.difficulty == Difficulty.HARD) ? 5 : 1;
-            currentWins += winsToAdd;
-            // --- END MODIFICATION ---
-
-            if (currentWins > bestScoreCache) {
-                ScoreManager.saveBestScore(currentWins);
-                bestScoreCache = currentWins;
-            }
-        }
-        final long finalWins = bestScoreCache;
-        SwingUtilities.invokeLater(() -> {
-            JOptionPane.showMessageDialog(app,
-                    message +
-                            "\n\nTotal Wins: " + finalWins,
-                    "Game Over (LWJGL)",
-                    JOptionPane.INFORMATION_MESSAGE);
-            app.setVisible(true);
-            app.showMenu();
-        });
     }
 
     private void dispose() {
-        // ... (This method is unchanged) ...
         if (soundManager != null) {
             soundManager.stopAmbiance();
         }
         hudRenderer.cleanup();
+        if (inGameUI != null)
+            inGameUI.cleanup();
 
-        // 💥 MODIFIED: Clean up all textures in the map 💥
         for (int id : loadedTextures.values()) {
             glDeleteTextures(id);
         }
-        // --- 💥 END MODIFIED CLEANUP 💥 ---
 
         Callbacks.glfwFreeCallbacks(window);
         glfwDestroyWindow(window);
         glfwTerminate();
-        glfwSetErrorCallback(null).free();
+        GLFWErrorCallback cb = glfwSetErrorCallback(null);
+        if (cb != null)
+            cb.free();
     }
 
-    // --- Swing Communication Getters/Setters ---
-    // (These are all unchanged, but setAutoCollectActive has AI state reset)
-    public boolean isAutoCollectActive() { return isAutoCollectActive; }
+    // ============================================================
+    // GETTERS / SETTERS (used by InGameUI admin panel)
+    // ============================================================
+
+    public boolean isAutoCollectActive() {
+        return isAutoCollectActive;
+    }
+
     public void setAutoCollectActive(boolean active) {
         this.isAutoCollectActive = active;
         if (active) {
             this.isFreeCamActive = false;
-            this.aiState = AiState.IDLE; // Reset AI when toggled
-            this.aiFailedPathTimer = 0.0f; // 💥FIX: Reset timer
+            this.aiState = AiState.IDLE;
+            this.aiFailedPathTimer = 0.0f;
         } else {
-            inputHandler.wPressed = false; // Stop AI from walking
+            if (inputHandler != null)
+                inputHandler.wPressed = false;
         }
     }
-    public void setFreeCamActive(boolean active) { this.isFreeCamActive = active; }
-    public boolean isDebugLinesActive() { return isDebugLinesActive; }
-    public void setDebugLinesActive(boolean active) { this.isDebugLinesActive = active; }
-    public boolean isDebugLinesFeatureAvailable() { return debugLinesFeatureAvailable; }
-    public float[] getGroundColor() { return new float[]{groundR, groundG, groundB}; }
+
+    public void setFreeCamActive(boolean active) {
+        this.isFreeCamActive = active;
+    }
+
+    public boolean isDebugLinesActive() {
+        return isDebugLinesActive;
+    }
+
+    public void setDebugLinesActive(boolean active) {
+        this.isDebugLinesActive = active;
+    }
+
+    public boolean isDebugLinesFeatureAvailable() {
+        return debugLinesFeatureAvailable;
+    }
+
+    public float[] getGroundColor() {
+        return new float[] { groundR, groundG, groundB };
+    }
+
     public void setGroundColor(float r, float g, float b) {
         this.groundR = r;
         this.groundG = g;
         this.groundB = b;
     }
+
     public float[] getPlayerPosition() {
         if (player != null) {
-            return new float[]{player.getPosX(), player.getPosY(), player.getPosZ()};
+            return new float[] { player.getPosX(), player.getPosY(), player.getPosZ() };
         }
-        return new float[]{0.0f, 0.0f, 0.0f};
+        return new float[] { 0.0f, 0.0f, 0.0f };
     }
+
     public void teleportPlayer(float x, float y, float z) {
         if (player != null) {
             player.teleportTo(x, y, z);
         }
     }
 
-    // 💥 NEW: Getter for the entire texture map (read-only) 💥
     public Map<String, Integer> getLoadedTextures() {
         return Collections.unmodifiableMap(loadedTextures);
     }
 
-    // 💥 NEW: Utility to get texture ID by name (for admin panel spawn logic) 💥
     public int getTextureIDByName(String name) {
         return loadedTextures.getOrDefault(name, 0);
     }
 
-    // --- Redundant getters kept for WorldLoader access ---
-    public int getOrbTextureID() { return orbTextureID; }
-    public int getWallTextureID() { return wallTextureID; }
-    public int getWoodTextureID() { return woodTextureID; }
-    public int getSheetsTextureID() { return sheetsTextureID; }
-    // --- END Redundant getters ---
+    public int getOrbTextureID() {
+        return orbTextureID;
+    }
+
+    public int getWallTextureID() {
+        return wallTextureID;
+    }
+
+    public int getWoodTextureID() {
+        return woodTextureID;
+    }
+
+    public int getSheetsTextureID() {
+        return sheetsTextureID;
+    }
 }

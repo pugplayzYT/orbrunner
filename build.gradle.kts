@@ -3,7 +3,11 @@ plugins {
 }
 
 group = "ohio.pugnetgames.chad"
-version = "1.0-SNAPSHOT"
+version = file("src/main/resources/update_logs/index.txt")
+    .readLines()
+    .filter { it.isNotBlank() && !it.startsWith("#") }
+    .last()
+    .removeSuffix(".md") // e.g. "v1.4.md" -> "v1.4"
 
 repositories {
     mavenCentral()

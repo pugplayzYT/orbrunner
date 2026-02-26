@@ -353,7 +353,6 @@ public class GamePanel extends Thread {
                                 setCursorVisible(true);
                                 inGameUI.syncAdminState(isAutoCollectActive, isDebugLinesActive,
                                         debugLinesFeatureAvailable,
-                                        groundR, groundG, groundB,
                                         getPlayerPosition(), loadedTextures);
                             } else {
                                 setCursorVisible(false);
@@ -389,6 +388,8 @@ public class GamePanel extends Thread {
         setCursorVisible(true);
         if (inGameUI != null)
             inGameUI.closeAdminPanel();
+        if (soundManager != null)
+            soundManager.stopAmbiance();
         bestScoreCache = ScoreManager.loadBestScore();
         // Stop movement
         if (inputHandler != null) {
@@ -1030,13 +1031,6 @@ public class GamePanel extends Thread {
                 @Override
                 public void onToggleDebugLines(boolean active) {
                     isDebugLinesActive = active;
-                }
-
-                @Override
-                public void onSetGroundColor(float r, float g, float b) {
-                    groundR = r;
-                    groundG = g;
-                    groundB = b;
                 }
 
                 @Override

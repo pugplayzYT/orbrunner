@@ -96,7 +96,6 @@ public class InGameUI {
     private boolean adminAutoCollect = false;
     private boolean adminDebugLines = false;
     private boolean adminDebugAvailable = false;
-    private float adminGroundR = 0.1f, adminGroundG = 0.5f, adminGroundB = 0.2f;
     private float[] adminPlayerPos = { 0, 0, 0 };
     private String adminSelectedShape = "CUBE";
     private String adminSelectedTexture = "NONE (Color)";
@@ -247,7 +246,7 @@ public class InGameUI {
         fontRenderer.drawText(title, titleX, titleY, 0.235f, 1.0f, 0.47f);
 
         // Subtitle
-        String subtitle = "LWJGL OPENGL EDITION";
+        String subtitle = "LWJGL OPENGL EDITION  " + updateLogManager.getLatestVersion();
         float subW = fontRenderer.getTextWidth(subtitle);
         float subX = (width - subW) / 2.0f;
         float subY = titleY + 50;
@@ -837,8 +836,6 @@ public class InGameUI {
 
         void onToggleDebugLines(boolean active);
 
-        void onSetGroundColor(float r, float g, float b);
-
         void onSpawnObject(String shape, String textureName);
 
         void onTeleport(float x, float y, float z);
@@ -847,14 +844,11 @@ public class InGameUI {
     }
 
     public void syncAdminState(boolean autoCollect, boolean debugLines, boolean debugAvailable,
-            float gR, float gG, float gB, float[] playerPos,
+            float[] playerPos,
             Map<String, Integer> textures) {
         this.adminAutoCollect = autoCollect;
         this.adminDebugLines = debugLines;
         this.adminDebugAvailable = debugAvailable;
-        this.adminGroundR = gR;
-        this.adminGroundG = gG;
-        this.adminGroundB = gB;
         if (playerPos != null) {
             this.adminPlayerPos = playerPos;
             this.tpX = playerPos[0];
@@ -881,7 +875,7 @@ public class InGameUI {
         this.screenW = width;
         this.screenH = height;
 
-        float panelW = 380;
+        float panelW = 460;
         float panelH = 700;
         float panelX = width - panelW - 20;
         float panelY = 20;
@@ -999,25 +993,6 @@ public class InGameUI {
                 0.39f, 0.58f, 0.93f,
                 () -> callback.onTeleport(tpX, tpY, tpZ)));
         cy += lineH + 10;
-
-        // --- Section: Ground Color ---
-        fontRenderer.drawText("--- Ground Color ---", cx, cy, 0.235f, 1.0f, 0.47f);
-        cy += 35;
-
-        cy = renderSlider(cx, cy, contentW, "R", adminGroundR, 1.0f, 0.4f, 0.4f, (val) -> {
-            adminGroundR = val;
-            callback.onSetGroundColor(adminGroundR, adminGroundG, adminGroundB);
-        });
-
-        cy = renderSlider(cx, cy, contentW, "G", adminGroundG, 0.4f, 1.0f, 0.4f, (val) -> {
-            adminGroundG = val;
-            callback.onSetGroundColor(adminGroundR, adminGroundG, adminGroundB);
-        });
-
-        cy = renderSlider(cx, cy, contentW, "B", adminGroundB, 0.4f, 0.4f, 1.0f, (val) -> {
-            adminGroundB = val;
-            callback.onSetGroundColor(adminGroundR, adminGroundG, adminGroundB);
-        });
 
         // Close button — sets the justClosed flag so GamePanel restores cursor
         cy += 10;

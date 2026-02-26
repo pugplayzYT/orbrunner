@@ -13,6 +13,7 @@ public class SoundManager {
 
     private Thread ambianceThread;
     private volatile boolean keepPlaying = false;
+    private volatile Player currentPlayer = null;
     private final String AUDIO_FILE_NAME = "ambiance.mp3";
     private static final long AMBIANCE_LOOP_DELAY_MS = 100;
 
@@ -107,6 +108,7 @@ public class SoundManager {
 
                         try (BufferedInputStream bis = new BufferedInputStream(audioStream)) {
                             Player player = new Player(bis);
+                            currentPlayer = player;
                             System.out.println("Playing track: " + AUDIO_FILE_NAME);
 
                             // Apply volume shortly after playback starts
@@ -122,6 +124,7 @@ public class SoundManager {
                             volumeApplier.start();
 
                             player.play();
+                            currentPlayer = null;
 
                             if (player.isComplete()) {
                                 try {
@@ -153,6 +156,10 @@ public class SoundManager {
     public void stopAmbiance() {
         if (ambianceThread != null) {
             keepPlaying = false;
+            if (currentPlayer != null) {
+                currentPlayer.close();
+                currentPlayer = null;
+            }
             if (ambianceThread.isAlive()) {
                 ambianceThread.interrupt();
             }

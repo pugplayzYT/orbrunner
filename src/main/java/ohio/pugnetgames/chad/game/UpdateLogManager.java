@@ -157,4 +157,15 @@ public class UpdateLogManager {
     public List<UpdateEntry> getEntries() {
         return Collections.unmodifiableList(entries);
     }
+
+    /**
+     * Returns the version string of the latest update, e.g. "v1.4".
+     * Extracted from the first entry's title by splitting on " - ".
+     */
+    public String getLatestVersion() {
+        if (entries.isEmpty()) return "v?.?";
+        String title = entries.get(0).title;
+        int dash = title.indexOf(" - ");
+        return dash >= 0 ? title.substring(0, dash) : title;
+    }
 }

@@ -1,6 +1,7 @@
 package ohio.pugnetgames.chad.game;
 
 import ohio.pugnetgames.chad.core.Difficulty;
+import ohio.pugnetgames.chad.core.RunData;
 import ohio.pugnetgames.chad.core.ScoreManager;
 
 import java.util.*;
@@ -58,6 +59,9 @@ public class InGameUI {
         }
     }
 
+    /** Which main-menu sub-screen is currently showing. */
+    private enum UIScreen { MAIN, RUNS_LIST, CREATE_RUN }
+
     // ============================================================
     // STATE
     // ============================================================
@@ -68,6 +72,17 @@ public class InGameUI {
     private final List<Button> menuButtons = new ArrayList<>();
     private Difficulty selectedDifficulty = null;
     private boolean quitRequested = false;
+
+    // --- Runs System ---
+    private UIScreen uiScreen = UIScreen.MAIN;
+    private List<RunData> runsListCache = new ArrayList<>();
+    private String textInputBuffer = "";
+    private boolean textInputActive = false;
+    private Difficulty createRunDifficulty = Difficulty.EASY;
+    private RunData runToStart = null;
+    private RunData newRunRequested = null;
+    private float runsListScroll = 0f;
+    private final List<Button> runsButtons = new ArrayList<>();
 
     // --- Game Over Overlay ---
     private final List<Button> gameOverButtons = new ArrayList<>();
@@ -162,6 +177,47 @@ public class InGameUI {
         mouseScrollDelta += (float) yOffset;
     }
 
+    /** Called from GamePanel's GLFW char callback — feeds typed characters into the text field. */
+    public void onChar(int codepoint) {
+        if (textInputActive && textInputBuffer.length() < 40) {
+            textInputBuffer += Character.toString((char) codepoint);
+        }
+    }
+
+    /**
+     * Called from GamePanel's globalKeyCallback — handles backspace, enter, and
+     * escape for the text input field.
+     */
+    public void onKey(int key, int action) {
+        if (action != GLFW_PRESS && action != GLFW_REPEAT) return;
+        if (!textInputActive) return;
+
+        if (key == GLFW_KEY_BACKSPACE && !textInputBuffer.isEmpty()) {
+            textInputBuffer = textInputBuffer.substring(0, textInputBuffer.length() - 1);
+        } else if (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
+            textInputActive = false;
+        }
+        // ESC in text field is handled by consumeMenuEscape() in the key callback
+    }
+
+    /**
+     * Called by GamePanel when ESC is pressed on the main menu.
+     * Navigates back through the screen stack; returns true if the escape was
+     * consumed (so GamePanel should NOT quit).
+     */
+    public boolean consumeMenuEscape() {
+        if (uiScreen == UIScreen.CREATE_RUN) {
+            uiScreen = UIScreen.RUNS_LIST;
+            textInputActive = false;
+            return true;
+        } else if (uiScreen == UIScreen.RUNS_LIST) {
+            uiScreen = UIScreen.MAIN;
+            textInputActive = false;
+            return true;
+        }
+        return false;
+    }
+
     // ============================================================
     // SETTINGS GETTERS (for GamePanel to read)
     // ============================================================
@@ -202,10 +258,9 @@ public class InGameUI {
     // MAIN MENU
     // ============================================================
 
+    /** Replaced by the Runs system. Always returns null. */
     public Difficulty getSelectedDifficulty() {
-        Difficulty d = selectedDifficulty;
-        selectedDifficulty = null;
-        return d;
+        return null;
     }
 
     public boolean isQuitRequested() {
@@ -214,28 +269,72 @@ public class InGameUI {
         return q;
     }
 
+    // --- Runs accessors ---
+
+    /**
+     * Returns the run the player clicked "Continue" on, then clears it.
+     * GamePanel should call {@code transitionToRun()} with the result.
+     */
+    public RunData getRunToStart() {
+        RunData r = runToStart;
+        runToStart = null;
+        return r;
+    }
+
+    /**
+     * Returns a stub RunData (displayName + difficulty only, folderPath = null)
+     * representing a new run the player requested. GamePanel must call
+     * {@code runManager.createRun(stub.displayName, stub.difficulty)} to
+     * produce the real RunData before calling {@code transitionToRun()}.
+     */
+    public RunData getNewRunRequested() {
+        RunData r = newRunRequested;
+        newRunRequested = null;
+        return r;
+    }
+
+    /**
+     * Refreshes the cached list of runs shown in the Runs List screen.
+     * Called by GamePanel whenever it returns to the main menu.
+     */
+    public void refreshRunsList(List<RunData> runs) {
+        this.runsListCache = new ArrayList<>(runs);
+        this.textInputActive = false;
+    }
+
     public void renderMainMenu(int width, int height) {
         this.screenW = width;
         this.screenH = height;
 
-        // Background
+        // Background — shared by all sub-screens
         drawFilledRect(0, 0, width, height, 0.094f, 0.102f, 0.125f, 1.0f);
-
-        // Subtle gradient overlay at top
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         drawFilledRect(0, 0, width, height / 3, 0.15f, 0.08f, 0.25f, 0.3f);
 
-        // --- Calculate total content height so we can center the whole block ---
-        // Title line: ~48px, subtitle: ~30px, best score: ~30px, gap: 25px, 3 buttons +
-        // gaps
+        switch (uiScreen) {
+            case MAIN:      renderMainScreen(width, height);   break;
+            case RUNS_LIST: renderRunsList(width, height);     break;
+            case CREATE_RUN: renderCreateRun(width, height);   break;
+        }
+
+        consumeClick();
+        mouseScrollDelta = 0;
+    }
+
+    // ============================================================
+    // MAIN SCREEN (the original main menu landing page)
+    // ============================================================
+
+    private void renderMainScreen(int width, int height) {
+        // --- Calculate total content height to centre the block ---
         float btnW = 420;
         float btnH = 50;
         float btnGap = 15;
-        float titleBlockH = 48 + 30 + 30 + 25; // title + subtitle + best + gap before buttons
-        float buttonsBlockH = btnH * 3 + btnGap * 2;
+        float titleBlockH = 48 + 30 + 30 + 25; // title + subtitle + best + gap
+        float buttonsBlockH = btnH * 2 + btnGap; // RUNS + QUIT
         float totalH = titleBlockH + buttonsBlockH;
-        float startY = (height - totalH) / 2.0f - 30; // center vertically, nudge slightly up
+        float startY = (height - totalH) / 2.0f - 30;
 
         // Title
         String title = "MAZE ESCAPE 3D";
@@ -260,20 +359,16 @@ public class InGameUI {
         float bestY = subY + 35;
         fontRenderer.drawText(bestText, bestX, bestY, 0.8f, 0.8f, 0.8f);
 
-        // Buttons — right below text block
+        // Buttons
         menuButtons.clear();
         float btnX = (width - btnW) / 2.0f;
         float btnStartY = bestY + 50;
 
-        menuButtons.add(new Button("EASY (3 Keys, +1 Win)", btnX, btnStartY, btnW, btnH,
+        menuButtons.add(new Button("RUNS", btnX, btnStartY, btnW, btnH,
                 0.235f, 1.0f, 0.47f,
-                () -> selectedDifficulty = Difficulty.EASY));
+                () -> { uiScreen = UIScreen.RUNS_LIST; runsListScroll = 0; }));
 
-        menuButtons.add(new Button("HARD (10 Keys, +5 Wins)", btnX, btnStartY + btnH + btnGap, btnW, btnH,
-                1.0f, 0.4f, 0.2f,
-                () -> selectedDifficulty = Difficulty.HARD));
-
-        menuButtons.add(new Button("QUIT", btnX, btnStartY + (btnH + btnGap) * 2, btnW, btnH,
+        menuButtons.add(new Button("QUIT", btnX, btnStartY + btnH + btnGap, btnW, btnH,
                 0.6f, 0.6f, 0.6f,
                 () -> quitRequested = true));
 
@@ -282,25 +377,273 @@ public class InGameUI {
         // Credits
         String credits1 = "A PugNet Games Production";
         float c1W = fontRenderer.getTextWidth(credits1);
-        float c1X = (width - c1W) / 2.0f;
-        fontRenderer.drawText(credits1, c1X, height - 110, 0.235f, 1.0f, 0.47f);
+        fontRenderer.drawText(credits1, (width - c1W) / 2.0f, height - 110, 0.235f, 1.0f, 0.47f);
 
         String credits2 = "Powered by the Chad Engine";
         float c2W = fontRenderer.getTextWidth(credits2);
-        float c2X = (width - c2W) / 2.0f;
-        fontRenderer.drawText(credits2, c2X, height - 80, 0.4f, 0.35f, 0.5f);
+        fontRenderer.drawText(credits2, (width - c2W) / 2.0f, height - 80, 0.4f, 0.35f, 0.5f);
 
         // Controls footer
         String footer = "WASD to move  |  Mouse to look  |  ESC for pause menu";
         float footW = fontRenderer.getTextWidth(footer);
-        float footX = (width - footW) / 2.0f;
-        fontRenderer.drawText(footer, footX, height - 45, 0.35f, 0.35f, 0.35f);
+        fontRenderer.drawText(footer, (width - footW) / 2.0f, height - 45, 0.35f, 0.35f, 0.35f);
 
-        // --- Update Log Panel (right side) ---
+        // Update Log Panel (right side)
         renderUpdateLogPanel(width, height);
+    }
 
-        consumeClick();
-        mouseScrollDelta = 0; // consume scroll
+    // ============================================================
+    // RUNS LIST SCREEN
+    // ============================================================
+
+    private void renderRunsList(int width, int height) {
+        runsButtons.clear();
+
+        // --- Header ---
+        String header = "YOUR RUNS";
+        float hw = fontRenderer.getTextWidth(header);
+        fontRenderer.drawText(header, (width - hw) / 2.0f, 40, 0.235f, 1.0f, 0.47f);
+
+        // --- [CREATE RUN] button (top right) ---
+        float createBtnW = 190;
+        float createBtnH = 42;
+        runsButtons.add(new Button("CREATE RUN", width - createBtnW - 30, 32, createBtnW, createBtnH,
+                0.235f, 1.0f, 0.47f,
+                () -> { uiScreen = UIScreen.CREATE_RUN; textInputBuffer = ""; textInputActive = true; }));
+
+        // --- List area ---
+        float listW = Math.min(720, width - 80);
+        float listX = (width - listW) / 2.0f;
+        float listTop = 100;
+        float listH = height - listTop - 90; // room for back button
+
+        // Scroll handling (only inside list area)
+        float mx = (float) mouseX;
+        float my = (float) mouseY;
+        if (mx >= listX && mx <= listX + listW && my >= listTop && my <= listTop + listH) {
+            runsListScroll -= mouseScrollDelta * 35;
+        }
+
+        float entryH = 62;
+        float totalContentH = runsListCache.size() * entryH;
+        float maxScroll = Math.max(0, totalContentH - listH);
+        runsListScroll = Math.max(0, Math.min(maxScroll, runsListScroll));
+
+        // List background + border
+        drawFilledRect(listX, listTop, listW, listH, 0.08f, 0.085f, 0.11f, 0.92f);
+        drawOutlineRect(listX, listTop, listW, listH, 0.235f, 1.0f, 0.47f);
+
+        // Scissor clip
+        glEnable(GL_SCISSOR_TEST);
+        glScissor((int) listX, screenH - (int) (listTop + listH), (int) listW, (int) listH);
+
+        float drawY = listTop + 5 - runsListScroll;
+        for (RunData run : runsListCache) {
+            boolean visible = drawY + entryH > listTop && drawY < listTop + listH;
+            if (visible) {
+                boolean completed = run.isCompleted();
+
+                // Row background
+                drawFilledRect(listX + 6, drawY, listW - 12, entryH - 6, 0.15f, 0.15f, 0.18f, 0.7f);
+
+                // Status indicator
+                if (!completed) {
+                    drawFilledCircle(listX + 20, drawY + (entryH - 6) / 2.0f, 5,
+                            0.235f, 1.0f, 0.47f, 1.0f);
+                } else {
+                    fontRenderer.drawText("✓", listX + 14, drawY + 12, 0.5f, 0.55f, 0.5f);
+                }
+
+                // Run name
+                float nameAlpha = completed ? 0.55f : 0.9f;
+                String nameText = truncateText(run.displayName, listW - 220);
+                fontRenderer.drawText(nameText, listX + 38, drawY + 5,
+                        nameAlpha, nameAlpha, nameAlpha);
+
+                // Difficulty badge
+                String diffBadge = run.difficulty == Difficulty.HARD ? "HARD" : "EASY";
+                float dr = run.difficulty == Difficulty.HARD ? 1.0f : 0.3f;
+                float dg = run.difficulty == Difficulty.HARD ? 0.4f : 0.9f;
+                float db = run.difficulty == Difficulty.HARD ? 0.2f : 0.35f;
+                float da = completed ? 0.5f : 1.0f;
+                fontRenderer.drawText(diffBadge, listX + 38, drawY + 32, dr * da, dg * da, db * da);
+
+                // Right side: Continue arrow (active) or elapsed time (completed)
+                if (!completed) {
+                    boolean hovered = mx >= listX + 6 && mx <= listX + listW - 6
+                            && my >= drawY && my <= drawY + entryH - 6;
+                    if (hovered) {
+                        drawFilledRect(listX + 6, drawY, listW - 12, entryH - 6,
+                                0.235f, 1.0f, 0.47f, 0.12f);
+                        String cont = "Continue ->";
+                        float contW = fontRenderer.getTextWidth(cont);
+                        fontRenderer.drawText(cont, listX + listW - contW - 18,
+                                drawY + (entryH - 6) / 2.0f - 9, 0.235f, 1.0f, 0.47f);
+                        if (mouseJustClicked) {
+                            runToStart = run;
+                        }
+                    }
+                } else {
+                    // Completed run — show time by default, explain on hover
+                    boolean hoveredCompleted = mx >= listX + 6 && mx <= listX + listW - 6
+                            && my >= drawY && my <= drawY + entryH - 6;
+                    if (hoveredCompleted) {
+                        // Dim overlay + explanation
+                        drawFilledRect(listX + 6, drawY, listW - 12, entryH - 6,
+                                0.2f, 0.2f, 0.2f, 0.18f);
+                        String note = "Already completed - can't replay";
+                        float noteW = fontRenderer.getTextWidth(note);
+                        fontRenderer.drawText(note, listX + listW - noteW - 18,
+                                drawY + (entryH - 6) / 2.0f - 9, 0.55f, 0.55f, 0.55f);
+                    } else {
+                        String timeStr = run.formatElapsed();
+                        float tsW = fontRenderer.getTextWidth(timeStr);
+                        fontRenderer.drawText(timeStr, listX + listW - tsW - 18,
+                                drawY + (entryH - 6) / 2.0f - 9, 0.5f, 0.5f, 0.55f);
+                    }
+                }
+            }
+            drawY += entryH;
+        }
+
+        glDisable(GL_SCISSOR_TEST);
+
+        // Empty state
+        if (runsListCache.isEmpty()) {
+            String msg = "No runs yet. Hit CREATE RUN to get started!";
+            float msgW = fontRenderer.getTextWidth(msg);
+            fontRenderer.drawText(msg, listX + (listW - msgW) / 2.0f,
+                    listTop + listH / 2.0f - 9, 0.45f, 0.45f, 0.45f);
+        }
+
+        // Scroll bar
+        if (totalContentH > listH) {
+            float sbH = Math.max(20, listH * (listH / totalContentH));
+            float sbY = listTop + (runsListScroll / maxScroll) * (listH - sbH);
+            drawFilledRect(listX + listW - 7, sbY, 4, sbH, 0.5f, 0.5f, 0.5f, 0.5f);
+        }
+
+        // --- [BACK] button ---
+        float backW = 200;
+        float backH = 46;
+        runsButtons.add(new Button("BACK", (width - backW) / 2.0f, listTop + listH + 18,
+                backW, backH, 0.6f, 0.6f, 0.6f,
+                () -> { uiScreen = UIScreen.MAIN; runsListScroll = 0; }));
+
+        processButtons(runsButtons);
+    }
+
+    // ============================================================
+    // CREATE RUN SCREEN
+    // ============================================================
+
+    private void renderCreateRun(int width, int height) {
+        runsButtons.clear();
+
+        float mx = (float) mouseX;
+        float my = (float) mouseY;
+
+        // --- Header ---
+        String header = "CREATE RUN";
+        float hw = fontRenderer.getTextWidth(header);
+        fontRenderer.drawText(header, (width - hw) / 2.0f, 80, 0.235f, 1.0f, 0.47f);
+
+        float cy = 180;
+
+        // --- Name text field ---
+        float fieldW = 500;
+        float fieldH = 48;
+        float fieldX = (width - fieldW) / 2.0f;
+        float fieldY = cy;
+
+        // Label
+        String nameLabel = "Name:";
+        fontRenderer.drawText(nameLabel, fieldX - fontRenderer.getTextWidth(nameLabel) - 14,
+                fieldY + 12, 0.75f, 0.75f, 0.75f);
+
+        // Field box
+        float borderR = textInputActive ? 0.235f : 0.4f;
+        float borderG = textInputActive ? 1.0f : 0.4f;
+        float borderB = textInputActive ? 0.47f : 0.4f;
+        drawFilledRect(fieldX, fieldY, fieldW, fieldH, 0.1f, 0.11f, 0.13f, 1.0f);
+        drawOutlineRect(fieldX, fieldY, fieldW, fieldH, borderR, borderG, borderB);
+
+        // Text content — placeholder only shown when inactive and empty so it's
+        // never confused for real typed text
+        String cursor = (textInputActive && (System.currentTimeMillis() / 500) % 2 == 0) ? "|" : "";
+        boolean showPlaceholder = textInputBuffer.isEmpty() && !textInputActive;
+        String displayText = showPlaceholder ? "My Run" : textInputBuffer;
+        float textR = showPlaceholder ? 0.4f : 0.9f;
+        fontRenderer.drawText(displayText + cursor, fieldX + 12, fieldY + 13, textR, textR, textR);
+
+        // Click anywhere on screen: clicking the field activates it, clicking outside deactivates it
+        if (mouseJustClicked) {
+            boolean clickedField = mx >= fieldX && mx <= fieldX + fieldW
+                    && my >= fieldY && my <= fieldY + fieldH;
+            if (clickedField) {
+                textInputActive = true;
+            } else {
+                // Only deactivate if clicking clearly outside the button area too —
+                // button clicks are handled by processButtons below; the shared flag
+                // gets set false there so the border updates immediately.
+                textInputActive = false;
+            }
+        }
+
+        cy += fieldH + 35;
+
+        // --- Difficulty toggle button ---
+        String diffLabel = (createRunDifficulty == Difficulty.HARD)
+                ? "HARD  (10 keys)" : "EASY  (3 keys)";
+        float dr = createRunDifficulty == Difficulty.HARD ? 1.0f : 0.235f;
+        float dg = createRunDifficulty == Difficulty.HARD ? 0.4f : 1.0f;
+        float db = createRunDifficulty == Difficulty.HARD ? 0.2f : 0.47f;
+        float diffBtnW = 300;
+        float diffBtnH = 46;
+        runsButtons.add(new Button(diffLabel, (width - diffBtnW) / 2.0f, cy, diffBtnW, diffBtnH,
+                dr, dg, db,
+                () -> createRunDifficulty = (createRunDifficulty == Difficulty.EASY)
+                        ? Difficulty.HARD : Difficulty.EASY));
+
+        cy += diffBtnH + 50;
+
+        // --- [CREATE] and [BACK] buttons ---
+        float btnW = 210;
+        float btnH = 52;
+        float gap = 24;
+        float startBtnX = (width - btnW * 2 - gap) / 2.0f;
+
+        final String nameForRun = textInputBuffer.isEmpty() ? "My Run" : textInputBuffer;
+        final Difficulty diffForRun = createRunDifficulty;
+        runsButtons.add(new Button("CREATE", startBtnX, cy, btnW, btnH,
+                0.235f, 1.0f, 0.47f,
+                () -> {
+                    // Produce a stub RunData — GamePanel calls runManager.createRun() on it
+                    newRunRequested = new RunData("__new__", nameForRun, diffForRun,
+                            0, 0, RunData.STATUS_IN_PROGRESS, 0, null);
+                    textInputActive = false;
+                    textInputBuffer = "";
+                    uiScreen = UIScreen.RUNS_LIST;
+                }));
+
+        runsButtons.add(new Button("BACK", startBtnX + btnW + gap, cy, btnW, btnH,
+                0.6f, 0.6f, 0.6f,
+                () -> { uiScreen = UIScreen.RUNS_LIST; textInputActive = false; }));
+
+        processButtons(runsButtons);
+    }
+
+    // ============================================================
+    // SHARED TEXT HELPERS
+    // ============================================================
+
+    /** Truncates text with ".." if wider than maxWidth pixels. */
+    private String truncateText(String text, float maxWidth) {
+        if (fontRenderer.getTextWidth(text) <= maxWidth) return text;
+        while (text.length() > 2 && fontRenderer.getTextWidth(text + "..") > maxWidth) {
+            text = text.substring(0, text.length() - 1);
+        }
+        return text + "..";
     }
 
     // ============================================================
@@ -772,31 +1115,44 @@ public class InGameUI {
         // Darken background
         drawFilledRect(0, 0, width, height, 0.0f, 0.0f, 0.0f, 0.75f);
 
-        // Panel
         float panelW = 500;
-        float panelH = 300;
+        float lineH = 38;
+        float btnH = 50;
+
+        // Pre-wrap the message so we know the panel height before drawing anything
+        List<String> msgLines = wrapText(gameOverMessage, panelW - 60);
+        float panelH = Math.max(260,
+                75 + msgLines.size() * lineH + 10 + lineH + 25 + btnH + 20);
+
         float panelX = (width - panelW) / 2.0f;
         float panelY = (height - panelH) / 2.0f;
         drawFilledRect(panelX, panelY, panelW, panelH, 0.12f, 0.13f, 0.16f, 0.95f);
         drawOutlineRect(panelX, panelY, panelW, panelH, 0.235f, 1.0f, 0.47f);
 
+        // Title
         String goTitle = "GAME OVER";
         float goTitleW = fontRenderer.getTextWidth(goTitle);
-        float goTitleX = panelX + (panelW - goTitleW) / 2.0f;
-        fontRenderer.drawText(goTitle, goTitleX, panelY + 30, 1.0f, 0.3f, 0.3f);
+        fontRenderer.drawText(goTitle, panelX + (panelW - goTitleW) / 2.0f,
+                panelY + 25, 1.0f, 0.3f, 0.3f);
 
+        // Message (wrapped)
         float msgX = panelX + 30;
-        fontRenderer.drawText(gameOverMessage, msgX, panelY + 90, 0.9f, 0.9f, 0.9f);
+        float cy = panelY + 75;
+        for (String line : msgLines) {
+            fontRenderer.drawText(line, msgX, cy, 0.9f, 0.9f, 0.9f);
+            cy += lineH;
+        }
+        cy += 10;
 
-        String winsText = "Total Wins: " + gameOverWins;
-        fontRenderer.drawText(winsText, msgX, panelY + 140, 0.8f, 0.8f, 0.8f);
+        // Total wins
+        fontRenderer.drawText("Total Wins: " + gameOverWins, msgX, cy, 0.8f, 0.8f, 0.8f);
+        cy += lineH + 25;
 
+        // Button positioned below content
         gameOverButtons.clear();
         float btnW = 250;
-        float btnH = 50;
         float btnX = (width - btnW) / 2.0f;
-        float btnY = panelY + panelH - 80;
-        gameOverButtons.add(new Button("RETURN TO MENU", btnX, btnY, btnW, btnH,
+        gameOverButtons.add(new Button("RETURN TO MENU", btnX, cy, btnW, btnH,
                 0.235f, 1.0f, 0.47f,
                 () -> gameOverReturnToMenu = true));
 

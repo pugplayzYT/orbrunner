@@ -159,8 +159,16 @@ public class Player {
     public float getPosX() { return posX; }
     public float getPosY() { return posY; }
     public float getPosZ() { return posZ; }
-    public float getYaw() { return yaw; }
+    public float getYaw()   { return yaw; }
+    public float getPitch() { return pitch; }
     public float getPlayerHalfHeight() { return PLAYER_HALF_HEIGHT; }
+
+    // --- Setters (for run restore) ---
+    public void setPosX(float x) { this.posX = x; }
+    public void setPosY(float y) { this.posY = y; }
+    public void setPosZ(float z) { this.posZ = z; }
+    public void setYaw(float yaw)     { this.yaw   = yaw; }
+    public void setPitch(float pitch) { this.pitch = pitch; }
 
     /**
      * NEW: Directly sets the player's position, bypassing physics for one frame.

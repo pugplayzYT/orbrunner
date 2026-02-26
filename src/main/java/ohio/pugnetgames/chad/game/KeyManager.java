@@ -215,6 +215,13 @@ public class KeyManager {
     }
 
     /**
+     * Directly sets the collected count (used when restoring a saved run).
+     */
+    public void setKeysCollected(int count) {
+        this.keysCollected = count;
+    }
+
+    /**
      * @return The total number of keys that exist (dynamic based on difficulty).
      */
     public int getTotalKeys() {

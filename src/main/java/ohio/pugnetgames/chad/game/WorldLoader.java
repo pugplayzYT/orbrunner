@@ -62,6 +62,7 @@ public class WorldLoader {
 
     // --- Generator State ---
     private Random random;
+    private long lastSeed;
     private List<GameObject> staticObjects;
     private List<Room> allRooms;
     private List<Room> allGeneratedBounds;
@@ -77,25 +78,55 @@ public class WorldLoader {
     private int woodTextureID;
     private int sheetsTextureID;
 
+    /** Returns the seed used in the most recent {@link #generateWorld} call. */
+    public long getLastSeed() {
+        return lastSeed;
+    }
+
+    /**
+     * Creates and returns a World object using a specific seed (for run save/load).
+     */
+    public World generateWorld(int wallTextureID, int orbTextureID, int woodTextureID,
+                               int sheetsTextureID, long seed) {
+        this.lastSeed  = seed;
+        this.random    = new Random(seed);
+        this.staticObjects        = new ArrayList<>();
+        this.allRooms             = new ArrayList<>();
+        this.allGeneratedBounds   = new ArrayList<>();
+        this.wallTextureID   = wallTextureID;
+        this.orbTextureID    = orbTextureID;
+        this.woodTextureID   = woodTextureID;
+        this.sheetsTextureID = sheetsTextureID;
+        this.forceCourtyards = BuildManager.getBoolean("feature.allcourtyards.enabled");
+        this.forceBedrooms   = BuildManager.getBoolean("feature.allbedrooms.enabled");
+        return buildWorld();
+    }
+
     /**
      * Creates and returns a World object containing all static GameObjects and room data.
      */
     public World generateWorld(int wallTextureID, int orbTextureID, int woodTextureID, int sheetsTextureID) {
-        // 1. Init state
-        this.random = new Random();
-        this.staticObjects = new ArrayList<>();
-        this.allRooms = new ArrayList<>();
+        this.lastSeed        = new Random().nextLong();
+        this.random          = new Random(lastSeed);
+        this.staticObjects   = new ArrayList<>();
+        this.allRooms        = new ArrayList<>();
         this.allGeneratedBounds = new ArrayList<>();
-        this.wallTextureID = wallTextureID;
-        this.orbTextureID = orbTextureID;
-        this.woodTextureID = woodTextureID;
+        this.wallTextureID   = wallTextureID;
+        this.orbTextureID    = orbTextureID;
+        this.woodTextureID   = woodTextureID;
         this.sheetsTextureID = sheetsTextureID;
+        this.forceCourtyards = BuildManager.getBoolean("feature.allcourtyards.enabled");
+        this.forceBedrooms   = BuildManager.getBoolean("feature.allbedrooms.enabled");
+        return buildWorld();
+    }
 
+    /**
+     * Core world-building logic shared by both generateWorld overloads.
+     * Assumes random, staticObjects, allRooms, textures, and flags are already set.
+     */
+    private World buildWorld() {
         this.escapeDoor = null;
         this.winTrigger = null;
-
-        this.forceCourtyards = BuildManager.getBoolean("feature.allcourtyards.enabled");
-        this.forceBedrooms = BuildManager.getBoolean("feature.allbedrooms.enabled");
 
         int totalRoomsToGenerate = random.nextInt(2) + 50; // 50 or 51
         List<Room> roomsToProcess = new ArrayList<>();

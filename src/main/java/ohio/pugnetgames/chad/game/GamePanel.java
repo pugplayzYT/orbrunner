@@ -1,9 +1,12 @@
 package ohio.pugnetgames.chad.game;
 
 import ohio.pugnetgames.chad.core.BuildManager;
+import ohio.pugnetgames.chad.core.Difficulty;
+import ohio.pugnetgames.chad.core.RunData;
+import ohio.pugnetgames.chad.core.RunManager;
+import ohio.pugnetgames.chad.core.RunState;
 import ohio.pugnetgames.chad.core.ScoreManager;
 import ohio.pugnetgames.chad.core.SoundManager;
-import ohio.pugnetgames.chad.core.Difficulty;
 import ohio.pugnetgames.chad.game.GameObject.ShapeType;
 import ohio.pugnetgames.chad.game.Room.RoomType;
 
@@ -79,6 +82,12 @@ public class GamePanel extends Thread {
     private final float FRAME_TIME_ESTIMATE = 0.0166f;
     private boolean allKeysCollectedMessageTriggered = false;
     private String hotColdText = "";
+
+    // --- RUNS SYSTEM ---
+    private RunManager runManager;
+    private RunData activeRun = null;
+    private long runStartTimeMs = 0;
+    private long runElapsedMs = 0; // accumulated elapsed from previous sessions
 
     // --- GAME SYSTEMS ---
     private World world;
@@ -221,8 +230,9 @@ public class GamePanel extends Thread {
         sheetsTextureID = loadedTextures.getOrDefault("sheets_texture.png", 0);
 
         // Initialize game systems that persist across rounds
+        runManager  = new RunManager();
         worldLoader = new WorldLoader();
-        keyManager = new KeyManager();
+        keyManager  = new KeyManager();
         hudRenderer = new HudRenderer();
         debugRenderer = new DebugRenderer();
         soundManager = new SoundManager();
@@ -231,6 +241,11 @@ public class GamePanel extends Thread {
         // Initialize in-game UI
         inGameUI = new InGameUI();
         inGameUI.init();
+
+        // Forward typed characters to InGameUI for text-input fields (Create Run screen)
+        glfwSetCharCallback(window, (win, codepoint) -> {
+            if (inGameUI != null) inGameUI.onChar((int) codepoint);
+        });
 
         // OpenGL state
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -311,12 +326,20 @@ public class GamePanel extends Thread {
             inputHandler.keyCallback.invoke(window, key, scode, action, mods);
         }
 
+        // Forward to InGameUI for text-input handling (backspace, enter)
+        if (inGameUI != null) {
+            inGameUI.onKey(key, action);
+        }
+
         if (action == GLFW_RELEASE) {
             switch (gameState) {
                 case MAIN_MENU:
                     if (key == GLFW_KEY_ESCAPE) {
-                        isRunning = false;
-                        glfwSetWindowShouldClose(window, true);
+                        // Let InGameUI navigate back through sub-screens first
+                        if (inGameUI == null || !inGameUI.consumeMenuEscape()) {
+                            isRunning = false;
+                            glfwSetWindowShouldClose(window, true);
+                        }
                     }
                     break;
 
@@ -384,10 +407,18 @@ public class GamePanel extends Thread {
     // ============================================================
 
     private void transitionToMainMenu() {
+        // Auto-save the active run before returning to the menu
+        if (activeRun != null && !activeRun.isCompleted()) {
+            saveCurrentRunState();
+        }
+        activeRun = null;
+
         gameState = GameState.MAIN_MENU;
         setCursorVisible(true);
-        if (inGameUI != null)
+        if (inGameUI != null) {
             inGameUI.closeAdminPanel();
+            inGameUI.refreshRunsList(runManager.loadAllRuns());
+        }
         if (soundManager != null)
             soundManager.stopAmbiance();
         bestScoreCache = ScoreManager.loadBestScore();
@@ -400,18 +431,50 @@ public class GamePanel extends Thread {
         }
     }
 
-    private void transitionToPlaying(Difficulty diff) {
-        this.difficulty = diff;
-        if (this.difficulty == Difficulty.HARD) {
-            this.TOTAL_KEYS = 10;
-        } else {
-            this.TOTAL_KEYS = 3;
-        }
+    private void transitionToRun(RunData run) {
+        this.activeRun  = run;
+        this.difficulty = run.difficulty;
+        this.TOTAL_KEYS = (run.difficulty == Difficulty.HARD) ? 10 : 3;
 
         setCursorVisible(false);
         if (inGameUI != null)
             inGameUI.closeAdminPanel();
-        startGame();
+
+        RunState saved = runManager.loadRunState(run);
+        if (saved != null && saved.keysCollected.length == TOTAL_KEYS) {
+            // Continue a saved run: regenerate the same world with the stored seed
+            startGame(saved.worldSeed);
+            player.setPosX(saved.playerX);
+            player.setPosY(saved.playerY);
+            player.setPosZ(saved.playerZ);
+            player.setYaw(saved.yaw);
+            player.setPitch(saved.pitch);
+            // Restore key collection state
+            List<Key> keys = keyManager.getKeys();
+            int restoredCount = 0;
+            for (int i = 0; i < keys.size() && i < saved.keysCollected.length; i++) {
+                if (saved.keysCollected[i]) {
+                    keys.get(i).collected = true;
+                    restoredCount++;
+                }
+            }
+            keyManager.setKeysCollected(restoredCount);
+            keysCollected = restoredCount;
+            if (keysCollected == TOTAL_KEYS) {
+                // All keys already collected — open the door
+                openEscapeDoor();
+            }
+            runElapsedMs = run.elapsedMs;
+        } else {
+            // Brand-new run
+            startGame();
+            runElapsedMs = 0;
+            // Save initial state so the run folder has a valid state.dat
+            saveCurrentRunState();
+        }
+
+        runStartTimeMs = System.currentTimeMillis();
+        updateObjectiveText();
         gameState = GameState.PLAYING;
     }
 
@@ -450,6 +513,12 @@ public class GamePanel extends Thread {
         gameOverMessage = message;
         gameOverIsWin = isWin;
 
+        // Mark the active run as completed (win only — losses keep the run alive)
+        if (isWin && activeRun != null && runManager != null) {
+            long elapsed = runElapsedMs + (System.currentTimeMillis() - runStartTimeMs);
+            runManager.markCompleted(activeRun, elapsed);
+        }
+
         long currentWins = bestScoreCache;
         if (isWin) {
             int winsToAdd = (this.difficulty == Difficulty.HARD) ? 5 : 1;
@@ -477,9 +546,21 @@ public class GamePanel extends Thread {
         if (inGameUI == null)
             return;
 
-        Difficulty pick = inGameUI.getSelectedDifficulty();
-        if (pick != null) {
-            transitionToPlaying(pick);
+        // Check if a run was selected to start/continue
+        RunData runToStart = inGameUI.getRunToStart();
+        if (runToStart != null) {
+            transitionToRun(runToStart);
+            return;
+        }
+
+        // Check if the player just pressed CREATE on the Create Run screen.
+        // InGameUI returns a stub (name + difficulty only); we create the real
+        // run folder here, refresh the list, then start it.
+        RunData newRunStub = inGameUI.getNewRunRequested();
+        if (newRunStub != null) {
+            RunData newRun = runManager.createRun(newRunStub.displayName, newRunStub.difficulty);
+            inGameUI.refreshRunsList(runManager.loadAllRuns());
+            transitionToRun(newRun);
             return;
         }
 
@@ -663,12 +744,23 @@ public class GamePanel extends Thread {
     // PLAYING STATE — GAME LOGIC
     // ============================================================
 
+    /** Starts a new game with a fresh random seed. */
     public void startGame() {
+        startGame(-1L);
+    }
+
+    /**
+     * Starts a new game with the given seed. Pass {@code -1} to generate a new
+     * random seed (same as calling {@link #startGame()}).
+     */
+    public void startGame(long seed) {
         currentScore = 0;
         bestScoreCache = ScoreManager.loadBestScore();
 
         // World Gen
-        world = worldLoader.generateWorld(wallTextureID, orbTextureID, woodTextureID, sheetsTextureID);
+        world = (seed == -1L)
+            ? worldLoader.generateWorld(wallTextureID, orbTextureID, woodTextureID, sheetsTextureID)
+            : worldLoader.generateWorld(wallTextureID, orbTextureID, woodTextureID, sheetsTextureID, seed);
         this.escapeDoor = world.getEscapeDoor();
         this.winTrigger = world.getWinTrigger();
 
@@ -709,6 +801,36 @@ public class GamePanel extends Thread {
         // Start ambiance
         if (soundManager != null) {
             soundManager.loadAndLoopAmbiance();
+        }
+    }
+
+    /** Saves the current in-flight run state to disk. */
+    private void saveCurrentRunState() {
+        if (activeRun == null || runManager == null || player == null || keyManager == null)
+            return;
+        List<Key> keys = keyManager.getKeys();
+        boolean[] collected = new boolean[keys.size()];
+        for (int i = 0; i < keys.size(); i++) {
+            collected[i] = keys.get(i).collected;
+        }
+        long elapsed = runElapsedMs + (System.currentTimeMillis() - runStartTimeMs);
+        RunState state = new RunState(
+            worldLoader.getLastSeed(),
+            player.getPosX(), player.getPosY(), player.getPosZ(),
+            player.getYaw(), player.getPitch(),
+            collected
+        );
+        runManager.saveRunState(activeRun, state);
+        runManager.updateElapsed(activeRun, elapsed);
+    }
+
+    /** Opens the escape door (called when restoring a run where all keys were already collected). */
+    private void openEscapeDoor() {
+        allKeysCollectedMessageTriggered = true;
+        if (escapeDoor != null) {
+            escapeDoor.setCollidable(false);
+            escapeDoor.setRendered(false);
+            if (pathfinder != null) pathfinder.openDoorInGrid(escapeDoor);
         }
     }
 

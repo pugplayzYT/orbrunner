@@ -3,3 +3,5 @@ v1.1.md
 v1.2.md
 v1.3.md
 v1.4.md
+v2.0.md
+v2.1.md

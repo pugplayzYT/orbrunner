@@ -24,6 +24,8 @@ public class InputHandler {
 
     // Sensitivity (adjustable from pause menu)
     private float ROTATION_SENSITIVITY = 0.1f;
+    // Invert Y axis (toggled from pause menu)
+    public boolean invertY = false;
 
     public void setSensitivity(float s) {
         this.ROTATION_SENSITIVITY = s;
@@ -90,7 +92,7 @@ public class InputHandler {
             double dy = ypos - lastMouseY;
 
             yaw += dx * ROTATION_SENSITIVITY;
-            pitch += dy * ROTATION_SENSITIVITY;
+            pitch += (invertY ? -dy : dy) * ROTATION_SENSITIVITY;
             pitch = Math.max(-89.0f, Math.min(89.0f, pitch));
 
             lastMouseX = xpos;

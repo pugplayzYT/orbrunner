@@ -195,6 +195,11 @@ public class GamePanel extends Thread {
                 inGameUI.onMouseButton(button, action);
             }
         });
+        glfwSetScrollCallback(window, (win, xoffset, yoffset) -> {
+            if (inGameUI != null) {
+                inGameUI.onMouseScroll(yoffset);
+            }
+        });
 
         glfwMakeContextCurrent(window);
         glfwSwapInterval(1);
@@ -726,9 +731,15 @@ public class GamePanel extends Thread {
         if (inGameUI != null) {
             // Sensitivity
             inputHandler.setSensitivity(inGameUI.getSensitivity());
-            // FOV & fog are applied on resume, but also continuously for live preview feel
+            // Invert Y
+            inputHandler.invertY = inGameUI.isInvertY();
+            // FOV & fog
             FIELD_OF_VIEW = inGameUI.getFieldOfView();
             glFogf(GL_FOG_DENSITY, inGameUI.getFogDensity());
+            // Volume
+            if (soundManager != null) {
+                soundManager.setVolume(inGameUI.getMasterVolume());
+            }
         }
 
         if (!isMapActive) {

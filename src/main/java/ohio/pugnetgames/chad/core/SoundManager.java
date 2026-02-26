@@ -2,28 +2,93 @@ package ohio.pugnetgames.chad.core;
 
 import java.io.BufferedInputStream;
 import java.io.InputStream;
-import javazoom.jl.player.Player; // Direct JLayer Player import
+import javazoom.jl.player.Player;
+import javax.sound.sampled.*;
 
 /**
  * Handles playing a single, looping audio clip for ambiance.
- * MODIFIED: Now also supports playing one-shot sound effects.
- * 💥 MODIFIED: Ambiance now pauses when a one-shot sound is played. 💥
+ * Also supports playing one-shot sound effects and master volume control.
  */
 public class SoundManager {
 
     private Thread ambianceThread;
     private volatile boolean keepPlaying = false;
-    private final String AUDIO_FILE_NAME = "ambiance.mp3"; // Reference the file name here
-
-    // 💥 MODIFIED: Resetting to a small delay, as the pause/resume logic is the new fix.
+    private final String AUDIO_FILE_NAME = "ambiance.mp3";
     private static final long AMBIANCE_LOOP_DELAY_MS = 100;
 
+    // Volume control (0.0 = mute, 1.0 = full)
+    private volatile float masterVolume = 1.0f;
+
     /**
-     * Loads and starts the ambiance track on a continuous loop in a background thread.
+     * Sets the master volume (0.0 to 1.0).
+     * Applies immediately to the system mixer output.
+     */
+    public void setVolume(float volume) {
+        this.masterVolume = Math.max(0.0f, Math.min(1.0f, volume));
+        applyVolumeToMixer();
+    }
+
+    public float getVolume() {
+        return masterVolume;
+    }
+
+    /**
+     * Applies volume to all available output lines via javax.sound.sampled.
+     * JLayer creates its own SourceDataLine internally, so we find it
+     * through the mixer and adjust gain on any active lines.
+     */
+    private void applyVolumeToMixer() {
+        try {
+            Mixer.Info[] mixerInfos = AudioSystem.getMixerInfo();
+            for (Mixer.Info info : mixerInfos) {
+                try {
+                    Mixer mixer = AudioSystem.getMixer(info);
+                    Line[] lines = mixer.getSourceLines();
+                    for (Line line : lines) {
+                        if (line instanceof SourceDataLine) {
+                            setLineVolume((SourceDataLine) line);
+                        } else if (line instanceof Clip) {
+                            setLineVolume((Clip) line);
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // Some mixers don't support enumeration
+                }
+            }
+        } catch (Exception e) {
+            // Volume control not available on this platform — not fatal
+        }
+    }
+
+    private void setLineVolume(DataLine line) {
+        try {
+            if (line.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
+                FloatControl gainControl = (FloatControl) line.getControl(FloatControl.Type.MASTER_GAIN);
+                // Convert linear volume (0-1) to decibels
+                // Gain range is typically -80dB to +6dB
+                float minGain = gainControl.getMinimum();
+                float maxGain = gainControl.getMaximum();
+                float gain;
+                if (masterVolume <= 0.001f) {
+                    gain = minGain; // Effectively mute
+                } else {
+                    // Logarithmic scale: feels natural to the ear
+                    gain = (float) (20.0 * Math.log10(masterVolume));
+                    gain = Math.max(minGain, Math.min(maxGain, gain));
+                }
+                gainControl.setValue(gain);
+            }
+        } catch (Exception ignored) {
+            // Not all lines support MASTER_GAIN
+        }
+    }
+
+    /**
+     * Loads and starts the ambiance track on a continuous loop.
      */
     public void loadAndLoopAmbiance() {
         if (ambianceThread != null && ambianceThread.isAlive()) {
-            return; // Already running
+            return;
         }
 
         keepPlaying = true;
@@ -32,31 +97,39 @@ public class SoundManager {
 
             while (keepPlaying) {
                 try {
-                    // Use a fresh stream for every loop iteration
                     try (InputStream audioStream = getClass().getClassLoader().getResourceAsStream(AUDIO_FILE_NAME)) {
                         if (audioStream == null) {
-                            System.err.println("FATAL: Ambiance sound file '" + AUDIO_FILE_NAME + "' not found in resources. Stopping playback.");
+                            System.err.println(
+                                    "FATAL: Ambiance sound file '" + AUDIO_FILE_NAME + "' not found in resources.");
                             keepPlaying = false;
                             break;
                         }
 
-                        // JLayer Player reads from BufferedInputStream
                         try (BufferedInputStream bis = new BufferedInputStream(audioStream)) {
                             Player player = new Player(bis);
                             System.out.println("Playing track: " + AUDIO_FILE_NAME);
-                            player.play(); // This is a blocking call until the track ends
 
-                            // Check if playback stopped naturally or was stopped by user
-                            if (player.isComplete()) {
-                                // If complete, it means we need to loop, so wait briefly
+                            // Apply volume shortly after playback starts
+                            // (JLayer creates the audio line lazily)
+                            Thread volumeApplier = new Thread(() -> {
                                 try {
-                                    Thread.sleep(AMBIANCE_LOOP_DELAY_MS); // Small delay between loops
+                                    Thread.sleep(200); // Wait for JLayer to open the line
+                                    applyVolumeToMixer();
                                 } catch (InterruptedException ignored) {
-                                    // Thread interrupted means we should stop
+                                }
+                            });
+                            volumeApplier.setDaemon(true);
+                            volumeApplier.start();
+
+                            player.play();
+
+                            if (player.isComplete()) {
+                                try {
+                                    Thread.sleep(AMBIANCE_LOOP_DELAY_MS);
+                                } catch (InterruptedException ignored) {
                                     break;
                                 }
                             } else {
-                                // Player stopped before completion, likely interrupted by stopAmbiance()
                                 break;
                             }
                         }
@@ -64,68 +137,73 @@ public class SoundManager {
                 } catch (Exception e) {
                     System.err.println("Error during MP3 playback loop.");
                     e.printStackTrace();
-                    keepPlaying = false; // Stop the loop on error
+                    keepPlaying = false;
                 }
             }
             System.out.println("Ambiance thread stopped.");
         }, "Ambiance-Player-Thread");
 
-        ambianceThread.setDaemon(true); // Allow application to exit if this is the only thread left
+        ambianceThread.setDaemon(true);
         ambianceThread.start();
     }
 
     /**
-     * Stops and closes the ambiance track by interrupting the player thread.
+     * Stops the ambiance track.
      */
     public void stopAmbiance() {
         if (ambianceThread != null) {
             keepPlaying = false;
-            // Interrupt the playing thread
             if (ambianceThread.isAlive()) {
                 ambianceThread.interrupt();
             }
             try {
-                ambianceThread.join(500); // Wait up to 500ms for the thread to die gracefully
+                ambianceThread.join(500);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-            ambianceThread = null; // Clear the reference
+            ambianceThread = null;
         }
     }
 
     /**
-     * --- NEW ---
-     * Plays a single sound effect one time on a new thread.
-     * Pauses ambiance, plays one-shot, then resumes ambiance.
-     * @param soundFileName The simple file name (e.g., "crackle.mp3") in resources.
+     * Plays a single sound effect, pausing ambiance during playback.
      */
     public void playOneShot(String soundFileName) {
-        // 💥 PAUSE AMBIANCE FIRST 💥
         stopAmbiance();
 
         Thread oneShotThread = new Thread(() -> {
             try (InputStream audioStream = getClass().getClassLoader().getResourceAsStream(soundFileName)) {
                 if (audioStream == null) {
-                    System.err.println("ERROR: One-shot sound file '" + soundFileName + "' not found in resources.");
+                    System.err.println("ERROR: One-shot sound file '" + soundFileName + "' not found.");
                     return;
                 }
 
                 try (BufferedInputStream bis = new BufferedInputStream(audioStream)) {
                     Player player = new Player(bis);
                     System.out.println("Playing one-shot: " + soundFileName);
-                    player.play(); // Blocking call until track ends
+
+                    // Apply volume after line opens
+                    Thread volumeApplier = new Thread(() -> {
+                        try {
+                            Thread.sleep(200);
+                            applyVolumeToMixer();
+                        } catch (InterruptedException ignored) {
+                        }
+                    });
+                    volumeApplier.setDaemon(true);
+                    volumeApplier.start();
+
+                    player.play();
                 }
             } catch (Exception e) {
                 System.err.println("Error during one-shot MP3 playback.");
                 e.printStackTrace();
             } finally {
-                // 💥 RESUME AMBIANCE AFTER PLAYBACK 💥
-                // This is guaranteed to run after the one-shot is finished.
                 loadAndLoopAmbiance();
             }
         }, "OneShot-Player-Thread");
 
-        oneShotThread.setDaemon(true); // Don't prevent app from closing
+        oneShotThread.setDaemon(true);
         oneShotThread.start();
     }
 }

@@ -109,10 +109,18 @@ public class InGameUI {
     // Teleport input
     private float tpX = 0, tpY = 1.5f, tpZ = 0;
 
+    // --- Update Log ---
+    private UpdateLogManager updateLogManager;
+    private int expandedLogIndex = -1; // -1 = list view, >=0 = showing detail
+    private float logListScroll = 0; // scroll offset for the list
+    private float logDetailScroll = 0; // scroll offset for the detail view
+    private final List<Button> logButtons = new ArrayList<>();
+
     // Mouse state
     private double mouseX, mouseY;
     private boolean mousePressed = false;
     private boolean mouseJustClicked = false;
+    private float mouseScrollDelta = 0; // accumulated scroll delta
 
     // Screen dimensions
     private int screenW, screenH;
@@ -123,7 +131,11 @@ public class InGameUI {
 
     public void init() {
         fontRenderer = new FontRenderer();
-        fontRenderer.init("BebasNeue-Regular.ttf");
+        fontRenderer.init("inter_extracted/extras/ttf/Inter-Regular.ttf");
+
+        // Load update logs
+        updateLogManager = new UpdateLogManager();
+        updateLogManager.loadAll();
     }
 
     // ============================================================
@@ -144,6 +156,11 @@ public class InGameUI {
                 mousePressed = false;
             }
         }
+    }
+
+    /** Called from GamePanel's GLFW scroll callback. */
+    public void onMouseScroll(double yOffset) {
+        mouseScrollDelta += (float) yOffset;
     }
 
     // ============================================================
@@ -210,52 +227,417 @@ public class InGameUI {
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         drawFilledRect(0, 0, width, height / 3, 0.15f, 0.08f, 0.25f, 0.3f);
 
+        // --- Calculate total content height so we can center the whole block ---
+        // Title line: ~48px, subtitle: ~30px, best score: ~30px, gap: 25px, 3 buttons +
+        // gaps
+        float btnW = 420;
+        float btnH = 50;
+        float btnGap = 15;
+        float titleBlockH = 48 + 30 + 30 + 25; // title + subtitle + best + gap before buttons
+        float buttonsBlockH = btnH * 3 + btnGap * 2;
+        float totalH = titleBlockH + buttonsBlockH;
+        float startY = (height - totalH) / 2.0f - 30; // center vertically, nudge slightly up
+
         // Title
         String title = "MAZE ESCAPE 3D";
-        float titleX = (width / 2.0f) - (title.length() * 14);
-        float titleY = height * 0.15f;
-        fontRenderer.drawText(title, titleX - 2, titleY - 2, 0.0f, 0.6f, 0.2f);
+        float titleW = fontRenderer.getTextWidth(title);
+        float titleX = (width - titleW) / 2.0f;
+        float titleY = startY;
+        fontRenderer.drawText(title, titleX - 2, titleY - 2, 0.0f, 0.6f, 0.2f); // glow
         fontRenderer.drawText(title, titleX, titleY, 0.235f, 1.0f, 0.47f);
 
         // Subtitle
         String subtitle = "LWJGL OPENGL EDITION";
-        float subX = (width / 2.0f) - (subtitle.length() * 8);
-        fontRenderer.drawText(subtitle, subX, titleY + 60, 0.6f, 0.6f, 0.6f);
+        float subW = fontRenderer.getTextWidth(subtitle);
+        float subX = (width - subW) / 2.0f;
+        float subY = titleY + 50;
+        fontRenderer.drawText(subtitle, subX, subY, 0.6f, 0.6f, 0.6f);
 
         // Best score
         long bestScore = ScoreManager.loadBestScore();
         String bestText = "BEST WINS: " + bestScore;
-        float bestX = (width / 2.0f) - (bestText.length() * 10);
-        fontRenderer.drawText(bestText, bestX, titleY + 110, 0.8f, 0.8f, 0.8f);
+        float bestW = fontRenderer.getTextWidth(bestText);
+        float bestX = (width - bestW) / 2.0f;
+        float bestY = subY + 35;
+        fontRenderer.drawText(bestText, bestX, bestY, 0.8f, 0.8f, 0.8f);
 
-        // Buttons
+        // Buttons — right below text block
         menuButtons.clear();
-        float btnW = 360;
-        float btnH = 55;
         float btnX = (width - btnW) / 2.0f;
-        float btnStartY = height * 0.45f;
-        float btnGap = 75;
+        float btnStartY = bestY + 50;
 
         menuButtons.add(new Button("EASY (3 Keys, +1 Win)", btnX, btnStartY, btnW, btnH,
                 0.235f, 1.0f, 0.47f,
                 () -> selectedDifficulty = Difficulty.EASY));
 
-        menuButtons.add(new Button("HARD (10 Keys, +5 Wins)", btnX, btnStartY + btnGap, btnW, btnH,
+        menuButtons.add(new Button("HARD (10 Keys, +5 Wins)", btnX, btnStartY + btnH + btnGap, btnW, btnH,
                 1.0f, 0.4f, 0.2f,
                 () -> selectedDifficulty = Difficulty.HARD));
 
-        menuButtons.add(new Button("QUIT", btnX, btnStartY + btnGap * 2, btnW, btnH,
+        menuButtons.add(new Button("QUIT", btnX, btnStartY + (btnH + btnGap) * 2, btnW, btnH,
                 0.6f, 0.6f, 0.6f,
                 () -> quitRequested = true));
 
         processButtons(menuButtons);
 
-        // Footer
+        // Credits
+        String credits1 = "A PugNet Games Production";
+        float c1W = fontRenderer.getTextWidth(credits1);
+        float c1X = (width - c1W) / 2.0f;
+        fontRenderer.drawText(credits1, c1X, height - 110, 0.235f, 1.0f, 0.47f);
+
+        String credits2 = "Powered by the Chad Engine";
+        float c2W = fontRenderer.getTextWidth(credits2);
+        float c2X = (width - c2W) / 2.0f;
+        fontRenderer.drawText(credits2, c2X, height - 80, 0.4f, 0.35f, 0.5f);
+
+        // Controls footer
         String footer = "WASD to move  |  Mouse to look  |  ESC for pause menu";
-        float footX = (width / 2.0f) - (footer.length() * 7);
-        fontRenderer.drawText(footer, footX, height - 60, 0.4f, 0.4f, 0.4f);
+        float footW = fontRenderer.getTextWidth(footer);
+        float footX = (width - footW) / 2.0f;
+        fontRenderer.drawText(footer, footX, height - 45, 0.35f, 0.35f, 0.35f);
+
+        // --- Update Log Panel (right side) ---
+        renderUpdateLogPanel(width, height);
 
         consumeClick();
+        mouseScrollDelta = 0; // consume scroll
+    }
+
+    // ============================================================
+    // UPDATE LOG PANEL (on main menu)
+    // ============================================================
+
+    private void renderUpdateLogPanel(int width, int height) {
+        if (expandedLogIndex >= 0) {
+            renderUpdateLogDetail(width, height);
+            return;
+        }
+
+        // Panel on the right side — wide enough for titles
+        float panelW = 440;
+        float panelH = height - 80;
+        float panelX = width - panelW - 15;
+        float panelY = 20;
+
+        // Background
+        drawFilledRect(panelX, panelY, panelW, panelH, 0.08f, 0.085f, 0.11f, 0.92f);
+        drawOutlineRect(panelX, panelY, panelW, panelH, 0.235f, 1.0f, 0.47f);
+
+        // Title
+        String logTitle = "UPDATE LOG";
+        float ltW = fontRenderer.getTextWidth(logTitle);
+        float ltX = panelX + (panelW - ltW) / 2.0f;
+        fontRenderer.drawText(logTitle, ltX, panelY + 10, 0.235f, 1.0f, 0.47f);
+
+        // Separator line
+        drawFilledRect(panelX + 10, panelY + 52, panelW - 20, 1, 0.3f, 0.3f, 0.35f, 0.6f);
+
+        float contentX = panelX + 10;
+        float contentY = panelY + 60;
+        float contentW = panelW - 20;
+        float contentH = panelH - 70;
+
+        // Handle scrolling (only when mouse is within panel)
+        float mx = (float) mouseX;
+        float my = (float) mouseY;
+        if (mx >= panelX && mx <= panelX + panelW && my >= panelY && my <= panelY + panelH) {
+            logListScroll -= mouseScrollDelta * 35;
+        }
+
+        // Calculate total content height for scroll limits
+        List<UpdateLogManager.UpdateEntry> entries = updateLogManager.getEntries();
+        float entryH = 55;
+        float totalListH = entries.size() * entryH;
+        float maxScroll = Math.max(0, totalListH - contentH);
+        logListScroll = Math.max(0, Math.min(maxScroll, logListScroll));
+
+        // Scissor test for clipping
+        glEnable(GL_SCISSOR_TEST);
+        // OpenGL scissor uses bottom-left origin, our UI uses top-left
+        int scissorX = (int) panelX;
+        int scissorY = screenH - (int) (contentY + contentH);
+        int scissorW = (int) panelW;
+        int scissorH = (int) contentH;
+        glScissor(scissorX, scissorY, scissorW, scissorH);
+
+        logButtons.clear();
+        float drawY = contentY - logListScroll;
+
+        for (int i = 0; i < entries.size(); i++) {
+            UpdateLogManager.UpdateEntry entry = entries.get(i);
+
+            // Only create clickable buttons for visible entries
+            if (drawY + entryH > contentY && drawY < contentY + contentH) {
+                // Entry background (subtle alternating)
+                float bgAlpha = (i % 2 == 0) ? 0.15f : 0.08f;
+                drawFilledRect(contentX, drawY, contentW, entryH - 5, 0.2f, 0.2f, 0.25f, bgAlpha);
+
+                // Green dot marker (vertically centered)
+                drawFilledRect(contentX + 8, drawY + 18, 8, 8, 0.235f, 1.0f, 0.47f, 1.0f);
+
+                // Title text
+                String entryTitle = entry.title;
+                float maxTextW = contentW - 35;
+                if (fontRenderer.getTextWidth(entryTitle) > maxTextW) {
+                    while (entryTitle.length() > 5 && fontRenderer.getTextWidth(entryTitle + "..") > maxTextW) {
+                        entryTitle = entryTitle.substring(0, entryTitle.length() - 1);
+                    }
+                    entryTitle += "..";
+                }
+                fontRenderer.drawText(entryTitle, contentX + 24, drawY + 4, 0.85f, 0.85f, 0.9f);
+
+                // Hover highlight + click
+                boolean hovered = mx >= contentX && mx <= contentX + contentW
+                        && my >= drawY && my <= drawY + entryH - 5;
+                if (hovered) {
+                    drawFilledRect(contentX, drawY, contentW, entryH - 5, 0.235f, 1.0f, 0.47f, 0.1f);
+                    if (mouseJustClicked) {
+                        expandedLogIndex = i;
+                        logDetailScroll = 0;
+                    }
+                }
+            }
+
+            drawY += entryH;
+        }
+
+        glDisable(GL_SCISSOR_TEST);
+
+        // Scroll indicator if content overflows
+        if (totalListH > contentH) {
+            float scrollBarH = Math.max(20, contentH * (contentH / totalListH));
+            float scrollBarY = contentY + (logListScroll / maxScroll) * (contentH - scrollBarH);
+            float scrollBarX = panelX + panelW - 8;
+            drawFilledRect(scrollBarX, scrollBarY, 4, scrollBarH, 0.5f, 0.5f, 0.5f, 0.5f);
+        }
+
+        if (entries.isEmpty()) {
+            fontRenderer.drawText("No update logs found.", contentX + 10, contentY + 10, 0.5f, 0.5f, 0.5f);
+        }
+    }
+
+    /**
+     * Renders the expanded update log detail overlay.
+     */
+    private void renderUpdateLogDetail(int width, int height) {
+        List<UpdateLogManager.UpdateEntry> entries = updateLogManager.getEntries();
+        if (expandedLogIndex < 0 || expandedLogIndex >= entries.size()) {
+            expandedLogIndex = -1;
+            return;
+        }
+
+        UpdateLogManager.UpdateEntry entry = entries.get(expandedLogIndex);
+
+        // Larger centered panel
+        float panelW = Math.min(700, width - 60);
+        float panelH = height - 60;
+        float panelX = (width - panelW) / 2.0f;
+        float panelY = 30;
+
+        // Darken background
+        drawFilledRect(0, 0, width, height, 0.0f, 0.0f, 0.0f, 0.6f);
+
+        // Panel background
+        drawFilledRect(panelX, panelY, panelW, panelH, 0.094f, 0.102f, 0.125f, 0.97f);
+        drawOutlineRect(panelX, panelY, panelW, panelH, 0.235f, 1.0f, 0.47f);
+
+        // Title bar
+        float titleBarH = 55;
+        drawFilledRect(panelX, panelY, panelW, titleBarH, 0.12f, 0.13f, 0.17f, 1.0f);
+
+        // Title text
+        fontRenderer.drawText(entry.title, panelX + 15, panelY + 6, 0.235f, 1.0f, 0.47f);
+
+        // X close button (top right)
+        float closeBtnSize = 40;
+        float closeBtnX = panelX + panelW - closeBtnSize - 8;
+        float closeBtnY = panelY + 8;
+        logButtons.clear();
+        logButtons.add(new Button("X", closeBtnX, closeBtnY, closeBtnSize, closeBtnSize,
+                1.0f, 0.3f, 0.3f,
+                () -> {
+                    expandedLogIndex = -1;
+                    logDetailScroll = 0;
+                }));
+
+        // Content area
+        float contentX = panelX + 20;
+        float contentY = panelY + titleBarH + 10;
+        float contentW = panelW - 40;
+        float contentH = panelH - titleBarH - 20;
+
+        // Handle scrolling
+        float mx = (float) mouseX;
+        float my = (float) mouseY;
+        if (mx >= panelX && mx <= panelX + panelW && my >= panelY && my <= panelY + panelH) {
+            logDetailScroll -= mouseScrollDelta * 40;
+        }
+
+        // Calculate total height with word wrapping
+        float subLineH = 40; // height per wrapped sub-line
+        float totalH = 10;
+        for (UpdateLogManager.MarkdownLine ml : entry.lines) {
+            if (ml.type == UpdateLogManager.MarkdownLine.Type.BLANK) {
+                totalH += 18;
+            } else {
+                float indent = getMarkdownIndent(ml);
+                float availW = contentW - indent;
+                List<String> wrapped = wrapText(ml.text, availW);
+                int lineCount = Math.max(1, wrapped.size());
+                // First line gets extra spacing for headers
+                totalH += getMarkdownFirstLineExtra(ml) + lineCount * subLineH;
+            }
+        }
+        float maxScroll = Math.max(0, totalH - contentH);
+        logDetailScroll = Math.max(0, Math.min(maxScroll, logDetailScroll));
+
+        // Scissor for content clipping
+        glEnable(GL_SCISSOR_TEST);
+        glScissor((int) contentX, screenH - (int) (contentY + contentH),
+                (int) contentW, (int) contentH);
+
+        float drawY = contentY + 5 - logDetailScroll;
+
+        for (UpdateLogManager.MarkdownLine ml : entry.lines) {
+            if (ml.type == UpdateLogManager.MarkdownLine.Type.BLANK) {
+                drawY += 18;
+                continue;
+            }
+
+            float indent = getMarkdownIndent(ml);
+            float availW = contentW - indent;
+            List<String> wrapped = wrapText(ml.text, availW);
+            float extra = getMarkdownFirstLineExtra(ml);
+            drawY += extra;
+
+            for (int wi = 0; wi < wrapped.size(); wi++) {
+                if (drawY + subLineH > contentY - 50 && drawY < contentY + contentH + 50) {
+                    renderMarkdownSubLine(ml, wrapped.get(wi), contentX, drawY, contentW, wi == 0);
+                }
+                drawY += subLineH;
+            }
+        }
+
+        glDisable(GL_SCISSOR_TEST);
+
+        // Scroll bar
+        if (totalH > contentH) {
+            float scrollBarH = Math.max(20, contentH * (contentH / totalH));
+            float scrollBarY = contentY + (logDetailScroll / maxScroll) * (contentH - scrollBarH);
+            float scrollBarX = panelX + panelW - 10;
+            drawFilledRect(scrollBarX, scrollBarY, 4, scrollBarH, 0.5f, 0.5f, 0.5f, 0.5f);
+        }
+
+        // Process X button
+        processButtons(logButtons);
+    }
+
+    /** Left indent for each markdown type (bullets and text are indented). */
+    private float getMarkdownIndent(UpdateLogManager.MarkdownLine ml) {
+        switch (ml.type) {
+            case H1:
+                return 0;
+            case H2:
+                return 0;
+            case H3:
+                return 5;
+            case BULLET:
+                return 28; // past the dot
+            case TEXT:
+                return 5;
+            default:
+                return 0;
+        }
+    }
+
+    /** Extra spacing added BEFORE the first sub-line of a header. */
+    private float getMarkdownFirstLineExtra(UpdateLogManager.MarkdownLine ml) {
+        switch (ml.type) {
+            case H1:
+                return 8;
+            case H2:
+                return 5;
+            case H3:
+                return 4;
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * Renders a single sub-line of a wrapped markdown line.
+     * 
+     * @param isFirstSubLine true if this is the first sub-line (gets the bullet
+     *                       dot, underline, etc.)
+     */
+    private void renderMarkdownSubLine(UpdateLogManager.MarkdownLine ml, String text,
+            float x, float y, float maxW, boolean isFirstSubLine) {
+        switch (ml.type) {
+            case H1:
+                fontRenderer.drawText(text, x, y, 0.235f, 1.0f, 0.47f);
+                break;
+            case H2:
+                fontRenderer.drawText(text, x, y, 0.6f, 0.75f, 1.0f);
+                break;
+            case H3:
+                fontRenderer.drawText(text, x + 5, y, 1.0f, 0.75f, 0.3f);
+                break;
+            case BULLET:
+                if (isFirstSubLine) {
+                    drawFilledRect(x + 12, y + 16, 6, 6, 0.6f, 0.8f, 0.6f, 1.0f);
+                }
+                fontRenderer.drawText(text, x + 28, y, 0.8f, 0.8f, 0.8f);
+                break;
+            case TEXT:
+                fontRenderer.drawText(text, x + 5, y, 0.75f, 0.75f, 0.75f);
+                break;
+            case BLANK:
+                break;
+        }
+    }
+
+    /**
+     * Splits text into multiple lines that fit within maxWidth pixels.
+     * Splits at word boundaries (spaces). If a single word is too wide,
+     * it gets its own line and will be clipped by the scissor test.
+     */
+    private List<String> wrapText(String text, float maxWidth) {
+        List<String> lines = new ArrayList<>();
+        if (text == null || text.isEmpty()) {
+            lines.add("");
+            return lines;
+        }
+
+        String[] words = text.split(" ");
+        StringBuilder current = new StringBuilder();
+
+        for (String word : words) {
+            if (current.length() == 0) {
+                // First word on the line — always add it
+                current.append(word);
+            } else {
+                // Check if adding this word exceeds width
+                String test = current.toString() + " " + word;
+                if (fontRenderer.getTextWidth(test) <= maxWidth) {
+                    current.append(" ").append(word);
+                } else {
+                    // Flush current line, start new one
+                    lines.add(current.toString());
+                    current = new StringBuilder(word);
+                }
+            }
+        }
+
+        // Don't forget the last line
+        if (current.length() > 0) {
+            lines.add(current.toString());
+        }
+
+        if (lines.isEmpty()) {
+            lines.add("");
+        }
+        return lines;
     }
 
     // ============================================================
@@ -282,86 +664,88 @@ public class InGameUI {
         drawFilledRect(0, 0, width, height, 0.0f, 0.0f, 0.0f, 0.7f);
 
         // Panel
-        float panelW = 500;
-        float panelH = 580;
+        float panelW = 480;
+        float panelH = 560;
         float panelX = (width - panelW) / 2.0f;
         float panelY = (height - panelH) / 2.0f;
         drawFilledRect(panelX, panelY, panelW, panelH, 0.094f, 0.102f, 0.125f, 0.96f);
         drawOutlineRect(panelX, panelY, panelW, panelH, 0.235f, 1.0f, 0.47f);
 
-        float cx = panelX + 30;
-        float cy = panelY + 25;
-        float contentW = panelW - 60;
-        float btnH = 45;
+        float cx = panelX + 25;
+        float cy = panelY + 20;
+        float contentW = panelW - 50;
+        float btnH = 42;
 
-        // Title
+        // Title (centered in panel)
         String title = "PAUSED";
-        float titleX = (width / 2.0f) - (title.length() * 14);
+        float titleW = fontRenderer.getTextWidth(title);
+        float titleX = panelX + (panelW - titleW) / 2.0f;
         fontRenderer.drawText(title, titleX, cy, 0.235f, 1.0f, 0.47f);
-        cy += 55;
+        cy += 50;
 
         // Resume button
         pauseButtons.clear();
         pauseButtons.add(new Button("RESUME", cx, cy, contentW, btnH,
                 0.235f, 1.0f, 0.47f,
                 () -> pauseResumeRequested = true));
-        cy += 65;
+        cy += btnH + 20;
 
         // --- Settings Section ---
         fontRenderer.drawText("--- Settings ---", cx, cy, 0.8f, 0.6f, 1.0f);
-        cy += 40;
+        cy += 35;
 
-        // Sensitivity slider (0.01 - 0.5, display as percentage-ish)
-        float sensNorm = (sensitivity - 0.01f) / (0.5f - 0.01f); // normalize to 0-1
-        cy = renderSlider(cx, cy, contentW, "Sensitivity", sensNorm, 0.8f, 0.6f, 1.0f, (val) -> {
-            sensitivity = 0.01f + val * (0.5f - 0.01f);
-        });
-        // Show actual value
-        fontRenderer.drawText(String.format("  (%.2f)", sensitivity), cx + contentW - 60, cy - 35, 0.6f, 0.6f, 0.6f);
+        // Sensitivity slider (0.01 - 0.5)
+        float sensNorm = (sensitivity - 0.01f) / (0.5f - 0.01f);
+        cy = renderSliderWithValue(cx, cy, contentW, "Sens", sensNorm,
+                String.format("%.2f", sensitivity), 0.8f, 0.6f, 1.0f, (val) -> {
+                    sensitivity = 0.01f + val * (0.5f - 0.01f);
+                });
 
         // FOV slider (30 - 120)
         float fovNorm = (fieldOfView - 30.0f) / (120.0f - 30.0f);
-        cy = renderSlider(cx, cy, contentW, "FOV", fovNorm, 1.0f, 0.8f, 0.3f, (val) -> {
-            fieldOfView = 30.0f + val * (120.0f - 30.0f);
-        });
-        fontRenderer.drawText(String.format("  (%.0f)", fieldOfView), cx + contentW - 60, cy - 35, 0.6f, 0.6f, 0.6f);
+        cy = renderSliderWithValue(cx, cy, contentW, "FOV", fovNorm,
+                String.format("%.0f", fieldOfView), 1.0f, 0.8f, 0.3f, (val) -> {
+                    fieldOfView = 30.0f + val * (120.0f - 30.0f);
+                });
 
         // Fog density slider (0.0 - 0.2)
         float fogNorm = fogDensity / 0.2f;
-        cy = renderSlider(cx, cy, contentW, "Fog", fogNorm, 0.5f, 0.7f, 1.0f, (val) -> {
-            fogDensity = val * 0.2f;
-        });
-        fontRenderer.drawText(String.format("  (%.3f)", fogDensity), cx + contentW - 80, cy - 35, 0.6f, 0.6f, 0.6f);
+        cy = renderSliderWithValue(cx, cy, contentW, "Fog", fogNorm,
+                String.format("%.3f", fogDensity), 0.5f, 0.7f, 1.0f, (val) -> {
+                    fogDensity = val * 0.2f;
+                });
 
         // Volume slider (0.0 - 1.0)
-        cy = renderSlider(cx, cy, contentW, "Vol", masterVolume, 0.3f, 1.0f, 0.5f, (val) -> {
-            masterVolume = val;
-        });
+        cy = renderSliderWithValue(cx, cy, contentW, "Vol", masterVolume,
+                String.format("%.0f%%", masterVolume * 100), 0.3f, 1.0f, 0.5f, (val) -> {
+                    masterVolume = val;
+                });
 
         cy += 5;
 
         // --- Fun Toggles ---
         fontRenderer.drawText("--- Extras ---", cx, cy, 1.0f, 0.65f, 0.0f);
-        cy += 40;
+        cy += 35;
 
         // Invert Y toggle
         String invText = invertY ? "Invert Y: ON" : "Invert Y: OFF";
         pauseButtons.add(new Button(invText, cx, cy, contentW, 38,
                 invertY ? 1.0f : 0.5f, invertY ? 0.65f : 0.5f, invertY ? 0.0f : 0.5f,
                 () -> invertY = !invertY));
-        cy += 55;
+        cy += 50;
 
-        // Quit to Menu button (red-ish)
+        // Quit to Menu button
         pauseButtons.add(new Button("QUIT TO MENU", cx, cy, contentW, btnH,
                 1.0f, 0.3f, 0.3f,
                 () -> pauseQuitToMenuRequested = true));
 
         processButtons(pauseButtons);
 
-        // Hint at bottom
+        // Hint at bottom of panel
         String hint = "Press ESC to resume";
-        float hintX = (width / 2.0f) - (hint.length() * 8);
-        fontRenderer.drawText(hint, hintX, panelY + panelH - 35, 0.4f, 0.4f, 0.4f);
+        float hintW = fontRenderer.getTextWidth(hint);
+        float hintX = panelX + (panelW - hintW) / 2.0f;
+        fontRenderer.drawText(hint, hintX, panelY + panelH - 30, 0.4f, 0.4f, 0.4f);
 
         consumeClick();
     }
@@ -398,7 +782,8 @@ public class InGameUI {
         drawOutlineRect(panelX, panelY, panelW, panelH, 0.235f, 1.0f, 0.47f);
 
         String goTitle = "GAME OVER";
-        float goTitleX = (width / 2.0f) - (goTitle.length() * 14);
+        float goTitleW = fontRenderer.getTextWidth(goTitle);
+        float goTitleX = panelX + (panelW - goTitleW) / 2.0f;
         fontRenderer.drawText(goTitle, goTitleX, panelY + 30, 1.0f, 0.3f, 0.3f);
 
         float msgX = panelX + 30;
@@ -660,7 +1045,7 @@ public class InGameUI {
             float value, float colR, float colG, float colB,
             SliderCallback callback) {
         float sliderH = 20;
-        float labelW = 30;
+        float labelW = 40; // width for single-char labels like R, G, B
         float sliderX = x + labelW;
         float sliderW = w - labelW;
 
@@ -694,6 +1079,51 @@ public class InGameUI {
         }
 
         return y + 40;
+    }
+
+    /**
+     * Slider variant for the pause menu — shows label, slider bar, and value text.
+     * Label column is wider to fit labels like "Sens", "FOV", "Fog", "Vol".
+     */
+    private float renderSliderWithValue(float x, float y, float w, String label,
+            float value, String valueText,
+            float colR, float colG, float colB,
+            SliderCallback callback) {
+        float sliderH = 20;
+        float labelW = 70; // wider for multi-char labels
+        float valueDisplayW = 70; // reserve space for value text on right
+        float sliderX = x + labelW;
+        float sliderW = w - labelW - valueDisplayW;
+
+        // Label
+        fontRenderer.drawText(label + ":", x, y, colR, colG, colB);
+
+        // Track background
+        drawFilledRect(sliderX, y + 5, sliderW, sliderH, 0.2f, 0.2f, 0.2f, 1.0f);
+
+        // Filled portion
+        float filledW = sliderW * Math.max(0, Math.min(1, value));
+        drawFilledRect(sliderX, y + 5, filledW, sliderH, colR, colG, colB, 0.7f);
+
+        // Handle
+        float handleX = sliderX + filledW - 5;
+        drawFilledRect(handleX, y + 2, 10, sliderH + 6, 1.0f, 1.0f, 1.0f, 0.9f);
+
+        // Value text (right-aligned after slider)
+        fontRenderer.drawText(valueText, sliderX + sliderW + 8, y, 0.7f, 0.7f, 0.7f);
+
+        // Interaction
+        if (mousePressed) {
+            float mx = (float) mouseX;
+            float my = (float) mouseY;
+            if (mx >= sliderX && mx <= sliderX + sliderW && my >= y && my <= y + sliderH + 10) {
+                float newVal = (mx - sliderX) / sliderW;
+                newVal = Math.max(0, Math.min(1, newVal));
+                callback.onValueChanged(newVal);
+            }
+        }
+
+        return y + 38;
     }
 
     // ============================================================
@@ -738,8 +1168,8 @@ public class InGameUI {
                     btn.borderR, btn.borderG, btn.borderB, 0.1f);
         }
 
-        float textX = btn.rect.x + (btn.rect.w / 2.0f) - (btn.label.length() * 8);
-        float textY = btn.rect.y + (btn.rect.h / 2.0f) - 14;
+        float textX = btn.rect.x + (btn.rect.w - fontRenderer.getTextWidth(btn.label)) / 2.0f;
+        float textY = btn.rect.y + (btn.rect.h / 2.0f) - 9;
         fontRenderer.drawText(btn.label, textX, textY,
                 btn.borderR, btn.borderG, btn.borderB);
     }

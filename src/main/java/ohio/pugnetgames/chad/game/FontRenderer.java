@@ -28,12 +28,13 @@ public class FontRenderer {
 
     private int textureID;
     private STBTTBakedChar.Buffer charData;
-    private final float FONT_HEIGHT = 48.0f; // The pixel height of the font
+    private final float FONT_HEIGHT = 32.0f; // The pixel height of the font
     private final int BITMAP_WIDTH = 1024;
     private final int BITMAP_HEIGHT = 1024;
 
     /**
      * Initializes the font renderer.
+     * 
      * @param fontPath The path to the .ttf font file.
      */
     public void init(String fontPath) {
@@ -47,7 +48,8 @@ public class FontRenderer {
             ByteBuffer bitmap = BufferUtils.createByteBuffer(BITMAP_WIDTH * BITMAP_HEIGHT);
 
             // Bake the font characters into the bitmap
-            int result = stbtt_BakeFontBitmap(ttfBuffer, FONT_HEIGHT, bitmap, BITMAP_WIDTH, BITMAP_HEIGHT, 32, charData);
+            int result = stbtt_BakeFontBitmap(ttfBuffer, FONT_HEIGHT, bitmap, BITMAP_WIDTH, BITMAP_HEIGHT, 32,
+                    charData);
             if (result <= 0) {
                 System.err.println("Failed to bake font bitmap. Result: " + result);
                 return;
@@ -56,7 +58,8 @@ public class FontRenderer {
             // Upload the bitmap to an OpenGL texture
             glBindTexture(GL_TEXTURE_2D, textureID);
             // Use GL_ALPHA for the single-channel bitmap
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, BITMAP_WIDTH, BITMAP_HEIGHT, 0, GL_ALPHA, GL_UNSIGNED_BYTE, bitmap);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_ALPHA, BITMAP_WIDTH, BITMAP_HEIGHT, 0, GL_ALPHA, GL_UNSIGNED_BYTE,
+                    bitmap);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -117,6 +120,30 @@ public class FontRenderer {
         glEnd();
 
         glDisable(GL_TEXTURE_2D);
+    }
+
+    /**
+     * Measures the pixel width of a string without rendering it.
+     * Uses the same baked character data as drawText.
+     */
+    public float getTextWidth(String text) {
+        if (charData == null || text == null)
+            return 0;
+        float width = 0;
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            FloatBuffer xPos = stack.floats(0);
+            FloatBuffer yPos = stack.floats(0);
+            STBTTAlignedQuad quad = STBTTAlignedQuad.malloc(stack);
+
+            for (int i = 0; i < text.length(); i++) {
+                char c = text.charAt(i);
+                if (c < 32 || c >= 128)
+                    continue;
+                stbtt_GetBakedQuad(charData, BITMAP_WIDTH, BITMAP_HEIGHT, c - 32, xPos, yPos, quad, true);
+            }
+            width = xPos.get(0);
+        }
+        return width;
     }
 
     /**

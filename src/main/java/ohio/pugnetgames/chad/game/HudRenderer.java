@@ -24,7 +24,7 @@ public class HudRenderer {
 
     public void init() {
         fontRenderer = new FontRenderer();
-        fontRenderer.init("BebasNeue-Regular.ttf");
+        fontRenderer.init("inter_extracted/extras/ttf/Inter-Regular.ttf");
     }
 
     /**

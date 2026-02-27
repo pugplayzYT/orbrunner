@@ -128,16 +128,18 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "Found version: $VERSION"
 
-      - name: Check if tag exists
-        id: check_tag
+      - name: Check if release exists
+        id: check_release
         run: |
-          if git rev-parse "refs/tags/$VERSION" >/dev/null 2>&1; then
+          if gh release view "$VERSION" >/dev/null 2>&1; then
             echo "exists=true" >> $GITHUB_ENV
-            echo "Tag $VERSION already exists. Skipping release."
+            echo "Release $VERSION already exists. Skipping."
           else
             echo "exists=false" >> $GITHUB_ENV
-            echo "Tag $VERSION does not exist yet. Proceeding with release."
+            echo "Release $VERSION does not exist. Proceeding."
           fi
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Download game JAR
         if: env.exists == 'false'
@@ -158,8 +160,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag ${{ env.VERSION }}
-          git push origin ${{ env.VERSION }}
+          if ! git rev-parse "refs/tags/${{ env.VERSION }}" >/dev/null 2>&1; then
+            git tag ${{ env.VERSION }}
+            git push origin ${{ env.VERSION }}
+          else
+            echo "Tag ${{ env.VERSION }} already exists, using it for the release."
+          fi
 
       - name: Create GitHub Release
         if: env.exists == 'false'

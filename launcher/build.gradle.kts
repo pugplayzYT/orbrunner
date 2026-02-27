@@ -29,6 +29,15 @@ tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
 }
 
+// Inject orbrunnerServerUrl from gradle.properties into launcher.properties at build time
+tasks.processResources {
+    val serverUrl = (findProperty("orbrunnerServerUrl") as? String) ?: "http://localhost:5000"
+    inputs.property("orbrunnerServerUrl", serverUrl)
+    filesMatching("launcher.properties") {
+        expand("orbrunnerServerUrl" to serverUrl)
+    }
+}
+
 // Fat JAR for distribution
 tasks.jar {
     manifest {

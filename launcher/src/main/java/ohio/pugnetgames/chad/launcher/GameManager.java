@@ -64,12 +64,27 @@ public class GameManager {
                 e.printStackTrace();
             }
         }
-        // Defaults
+        // Defaults — server URL is injected at build time via launcher.properties
         Config c = new Config();
-        c.serverUrl = "http://localhost:5000";
+        c.serverUrl = readBundledServerUrl();
         c.selectedVersion = null;
         c.lastPlayedVersion = null;
         return c;
+    }
+
+    private static String readBundledServerUrl() {
+        try (InputStream is = GameManager.class.getResourceAsStream("/launcher.properties")) {
+            if (is != null) {
+                Properties props = new Properties();
+                props.load(is);
+                String url = props.getProperty("server.url");
+                if (url != null && !url.isBlank())
+                    return url;
+            }
+        } catch (IOException e) {
+            System.err.println("[GameManager] Could not read bundled server URL: " + e.getMessage());
+        }
+        return "http://localhost:5000";
     }
 
     private void saveConfig() {

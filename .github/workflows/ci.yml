@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+    branches: ["main", "master"]
+
+jobs:
+  # ── Build Game ──────────────────────────────────────────────────────────────
+  build-game:
+    name: Build Game JAR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: "gradle"
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build game fat JAR
+        run: ./gradlew jar
+
+      - name: Upload game JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-jar
+          path: build/libs/orbrunner-*.jar
+          retention-days: 7
+
+  # ── Build Launcher ───────────────────────────────────────────────────────────
+  build-launcher:
+    name: Build Launcher JAR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: "gradle"
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build launcher fat JAR
+        run: ./gradlew :launcher:jar
+
+      - name: Upload launcher JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-jar
+          path: launcher/build/libs/launcher-*.jar
+          retention-days: 7
+
+  # ── Test Server ──────────────────────────────────────────────────────────────
+  test-server:
+    name: Test Flask Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r server/requirements.txt -r server/requirements-dev.txt
+
+      - name: Run server tests
+        run: pytest server/tests/ -v --tb=short

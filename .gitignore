@@ -40,7 +40,6 @@ bin/
 
 ### AI Agent / Claude Code ###
 .agent/
-.agents/
 .claude/
 CLAUDE.md
 

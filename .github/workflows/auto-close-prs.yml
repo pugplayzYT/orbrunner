@@ -25,17 +25,19 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: pr.number,
-              body: `Hey @${pr.user.login}, thanks for the interest in OrbRunner! 🎮
-
-OrbRunner is a solo-developed project and pull requests are only accepted from the core development team, so I'm going to close this one.
-
-**That said, your ideas and feedback are genuinely welcome!**
-If you spotted a bug or have a feature idea, please open an Issue instead — there are templates ready to go:
-
-- 🐛 [Report a bug](../../issues/new?template=bug_report.yml)
-- 💡 [Suggest a feature](../../issues/new?template=feature_suggestion.yml)
-
-Thanks for playing! — pugplayzYT`
+              body: [
+                `Hey @${pr.user.login}, thanks for the interest in OrbRunner! 🎮`,
+                "",
+                "OrbRunner is a solo-developed project and pull requests are only accepted from the core development team, so I'm going to close this one.",
+                "",
+                "**That said, your ideas and feedback are genuinely welcome!**",
+                "If you spotted a bug or have a feature idea, please open an Issue instead — there are templates ready to go:",
+                "",
+                "- 🐛 [Report a bug](../../issues/new?template=bug_report.yml)",
+                "- 💡 [Suggest a feature](../../issues/new?template=feature_suggestion.yml)",
+                "",
+                "Thanks for playing! — pugplayzYT"
+              ].join('\n')
             });
 
             await github.rest.pulls.update({

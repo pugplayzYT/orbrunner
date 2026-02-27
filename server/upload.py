@@ -84,13 +84,25 @@ def upload_jar(server_url: str, token: str, version: str, jar_path: str):
 def main():
     parser = argparse.ArgumentParser(description="Build and upload OrbRunner to the distribution server")
     parser.add_argument("--server", required=True, help="Server URL (e.g. http://localhost:5000)")
-    parser.add_argument("--token", required=True, help="Auth token for the upload endpoint")
+    parser.add_argument("--token", default=None, help="Auth token for the upload endpoint (default: read from server/.auth_token)")
     parser.add_argument("--version", help="Version string (default: read from index.txt)")
     parser.add_argument("--skip-build", action="store_true", help="Skip the build step, upload existing JAR")
     args = parser.parse_args()
 
     # Determine project root (assumes this script is in server/)
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    # Resolve auth token
+    token = args.token
+    if token is None:
+        token_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".auth_token")
+        if os.path.exists(token_file):
+            with open(token_file) as _tf:
+                token = _tf.read().strip()
+            print(f"[*] Token read from {token_file}")
+        else:
+            print("[!] No --token provided and no .auth_token file found — start the server first or pass --token")
+            sys.exit(1)
 
     version = args.version or get_current_version(project_root)
     print(f"[*] Version: {version}")
@@ -106,7 +118,7 @@ def main():
     else:
         jar_path = build_jar(project_root)
 
-    upload_jar(args.server, args.token, version, jar_path)
+    upload_jar(args.server, token, version, jar_path)
 
 
 if __name__ == "__main__":

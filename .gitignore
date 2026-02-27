@@ -63,6 +63,7 @@ server/versions/
 server/launcher/
 server/__pycache__/
 server/tests/__pycache__/
+server/.auth_token
 *.pyc
 
 ### Launcher ###

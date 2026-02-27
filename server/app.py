@@ -8,6 +8,7 @@ import re
 import json
 import time
 import hashlib
+import secrets
 from flask import Flask, request, jsonify, send_file, abort, Response, render_template
 
 app = Flask(__name__)
@@ -18,7 +19,15 @@ VERSIONS_DIR   = os.path.join(BASE_DIR, "versions")
 METADATA_FILE  = os.path.join(VERSIONS_DIR, "metadata.json")
 CHANGELOGS_DIR = os.path.join(BASE_DIR, "changelogs")
 LAUNCHER_DIR   = os.path.join(BASE_DIR, "launcher")
-AUTH_TOKEN     = os.environ.get("ORBRUNNER_AUTH_TOKEN", "changeme")
+_TOKEN_FILE    = os.path.join(BASE_DIR, ".auth_token")
+
+_env_token = os.environ.get("ORBRUNNER_AUTH_TOKEN")
+if _env_token:
+    AUTH_TOKEN = _env_token
+else:
+    AUTH_TOKEN = secrets.token_urlsafe(32)
+    with open(_TOKEN_FILE, "w") as _tf:
+        _tf.write(AUTH_TOKEN)
 
 os.makedirs(VERSIONS_DIR,   exist_ok=True)
 os.makedirs(CHANGELOGS_DIR, exist_ok=True)
@@ -211,5 +220,9 @@ def index():
 
 if __name__ == "__main__":
     print(f"[OrbRunner Server] Versions directory: {VERSIONS_DIR}")
-    print(f"[OrbRunner Server] Auth token: {'(set via env)' if os.environ.get('ORBRUNNER_AUTH_TOKEN') else AUTH_TOKEN}")
+    if _env_token:
+        print("[OrbRunner Server] Auth token: (set via ORBRUNNER_AUTH_TOKEN env var)")
+    else:
+        print(f"[OrbRunner Server] Auth token: {AUTH_TOKEN}")
+        print(f"[OrbRunner Server] Token saved to: {_TOKEN_FILE}")
     app.run(host="0.0.0.0", port=5000, debug=True)

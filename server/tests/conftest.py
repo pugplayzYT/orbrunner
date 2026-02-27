@@ -33,6 +33,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(server_app, "METADATA_FILE",  str(versions_dir / "metadata.json"))
     monkeypatch.setattr(server_app, "CHANGELOGS_DIR", str(changelogs_dir))
     monkeypatch.setattr(server_app, "LAUNCHER_DIR",   str(launcher_dir))
+    monkeypatch.setattr(server_app, "AUTH_TOKEN",     "changeme")
 
     server_app.app.config["TESTING"] = True
     with server_app.app.test_client() as c:

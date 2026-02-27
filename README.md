@@ -1,5 +1,27 @@
 # OrbRunner
 
+> [!NOTE]
+> **Usage & Licensing**
+>
+> This repository is **source-available**, not open source.
+>
+> **You may:**
+> - Clone and build the project for personal, non-commercial use
+> - Run your own private distribution server (e.g. for a local network)
+> - Fork the repository to develop and submit pull requests
+> - Study and learn from the code
+>
+> **You may not:**
+> - Redistribute this game — modified or unmodified — in any form (uploading elsewhere, repackaging, sharing builds publicly)
+> - Use any part of this codebase in a commercial product without explicit written permission
+> - Publish a fork as a standalone project or release
+>
+> Forks exist for the purpose of contributing back via pull requests. A fork is not a licence to distribute.
+>
+> © [pugplayzYT](https://github.com/pugplayzYT). All rights reserved.
+
+---
+
 OrbRunner is a 3D first-person maze escape game built from scratch in Java using LWJGL and OpenGL — no game engine. Every frame, every menu, every HUD element is rendered directly in OpenGL.
 
 The goal is simple: navigate a procedurally generated maze, collect all the keys, and find the exit before the horror overtakes you. Each run is named and saved to disk so you can quit and come back later to the exact same maze, same position, keys already collected.
@@ -90,7 +112,7 @@ Pull requests are welcome. To keep things consistent, there are a few requiremen
 
 ### Before You Start
 
-- Check existing issues or open a discussion first if you're planning something large. No point building something that won't land.
+- Open a discussion or leave a comment on a relevant commit before building something large. No point building something that won't land.
 - Keep changes focused. One feature or fix per PR.
 
 ### Requirements for Every PR

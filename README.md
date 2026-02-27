@@ -2,15 +2,72 @@
 > ## ⛔ External Pull Requests Are Not Accepted
 > OrbRunner is a solo-developed project. **Pull requests from outside the development team are automatically closed** — no exceptions.
 >
-> Forking this repository to create your own version or competing project is also **not permitted** under the license.
->
 > **If you have a bug report or feature suggestion, please use Issues:**
 > - 🐛 [Report a bug](../../issues/new?template=bug_report.yml)
 > - 💡 [Suggest a feature](../../issues/new?template=feature_suggestion.yml)
 
 # OrbRunner
 
-A 3D first-person maze escape game built with LWJGL (OpenGL/Java). Navigate procedurally generated rooms, collect keys, and find the exit. The project ships as three components: the game itself, a JavaFX launcher for version management, and a Flask distribution server.
+A 3D first-person maze escape game built with Java, LWJGL, and OpenGL. Navigate procedurally generated rooms, collect keys, and find the exit.
+
+---
+
+## Playing
+
+The easiest way to play is through the official launcher. It connects to the OrbRunner distribution server automatically — no configuration needed.
+
+| Platform | Download |
+|---|---|
+| Windows / macOS / Linux | [**Download Launcher**](https://github.com/pugplayzYT/orbrunner/releases/latest/download/launcher-1.0.0.jar) |
+
+**Requires Java 17+** — [Download from Adoptium](https://adoptium.net/)
+
+```bash
+java -jar launcher-1.0.0.jar
+```
+
+The launcher checks for updates, shows patch notes, lets you download any version, and launches the game. Official builds connect to the official server out of the box.
+
+---
+
+## Self-Hosting
+
+> [!NOTE]
+> You may clone this repository and run your own server for personal use. **Redistributing the game — modified or unmodified — is not permitted.**
+
+If you want to host the game on your own server (e.g. for a local network or private group), you need to run all three components yourself.
+
+### Requirements
+
+- Java 17+ — [Adoptium](https://adoptium.net/)
+- Python 3.11+ — [python.org](https://www.python.org/)
+- Git
+
+### Quick Setup
+
+```bash
+# 1. Clone
+git clone https://github.com/pugplayzYT/orbrunner.git
+cd orbrunner
+
+# 2. Point the launcher at your server
+#    Edit gradle.properties:
+#    orbrunnerServerUrl=http://your-server:5000
+
+# 3. Build
+./gradlew clean jar          # game JAR
+./gradlew :launcher:jar      # launcher JAR (server URL baked in)
+
+# 4. Start the server
+pip install -r server/requirements.txt
+python server/app.py
+# → Prints a random auth token and saves it to server/.auth_token
+
+# 5. Upload the game build
+python server/upload.py      # reads URL and token automatically
+```
+
+For a full walkthrough of the server setup, CI/CD wiring, and GitHub Secrets, see **[setup.md](setup.md)**.
 
 ---
 
@@ -18,87 +75,51 @@ A 3D first-person maze escape game built with LWJGL (OpenGL/Java). Navigate proc
 
 ```
 orbrunner/
-├── src/                        # Game (LWJGL / OpenGL)
-├── launcher/                   # Launcher (JavaFX)
-├── server/                     # Distribution server (Flask / Python)
-├── build.gradle.kts            # Game build config
-├── settings.gradle.kts         # Root Gradle settings (includes launcher)
-└── .agent/workflows/           # Agent workflow docs
+├── src/            Game (Java / LWJGL / OpenGL)
+├── launcher/       Launcher (Java / JavaFX)
+├── server/         Distribution server (Python / Flask)
+└── gradle.properties  Server URL config (baked into launcher at build time)
 ```
 
 ### Game
-First-person 3D gameplay rendered entirely in OpenGL — no Swing. All menus, HUD, and pause screens are drawn in-engine.
 
-- **Procedural generation** — seed-based room layouts (standard, courtyard, bedroom) with tunnels between rooms
-- **Runs system** — save/resume multi-session runs stored in `~/.orbCollectorGame/runs/`
-- **Key collection** — find keys scattered across rooms (especially on bedroom tables) to unlock the escape door
-- **HUD** — minimap, key counter, hot/cold proximity indicator, popup messages
-- **Audio** — looping ambient background + horror sound effects, volume controlled in real time
-- **Settings** — sensitivity, FOV, fog density, master volume, invert Y — persisted to `~/.orbCollectorGame/settings.dat`
+- **Procedural generation** — seed-based room layouts (standard, courtyard, bedroom) with connecting tunnels
+- **First-person 3D** — rendered entirely in OpenGL; menus and HUD drawn in-engine
+- **Runs system** — save/resume multi-session runs in `~/.orbCollectorGame/runs/`
+- **Key collection** — find keys to unlock the escape door
+- **HUD** — minimap, key counter, hot/cold proximity indicator
+- **Audio** — ambient loops and sound effects with real-time volume control
 
 ### Launcher
-Dark-themed JavaFX desktop app for installing, updating, and launching the game.
 
-- Lists available versions from the server, downloads and caches JARs locally (`~/.orbrunner/versions/`)
-- Shows per-version patch notes with formatted markdown rendering
-- Settings panel syncs live with the running game via a shared settings file and `WatchService`
-- Server URL is configurable in `~/.orbrunner/launcher.json`
+- Connects to the distribution server, lists available versions, downloads and caches JARs locally (`~/.orbrunner/versions/`)
+- Shows per-version patch notes with markdown rendering
+- Settings panel syncs live with the running game
+- Uninstall any version from the bottom bar
 
 ### Server
-Minimal Flask HTTP API for distributing game builds.
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/versions` | List all available versions |
-| `GET /api/latest` | Get latest version metadata |
-| `GET /api/download/<version>` | Download a version JAR |
-| `GET /api/changelog/<version>` | Get raw markdown changelog |
-| `POST /api/upload` | Upload a new build (requires auth token) |
+| `GET /api/latest` | Latest version metadata |
+| `GET /api/versions` | All available versions |
+| `GET /api/download/<version>` | Download a game JAR |
+| `GET /api/changelog/<version>` | Version changelog (markdown) |
+| `POST /api/upload` | Upload a build (requires auth token) |
+
+Generates a cryptographically secure random auth token on every start. Token is saved to `server/.auth_token` (gitignored).
 
 ---
 
-## Quick Start
+## CI/CD
 
-### Running the game directly
-```bash
-./gradlew run
-```
+On every push to `master` the pipeline:
 
-### Running the launcher
-```bash
-./gradlew :launcher:run
-```
-The launcher connects to `http://localhost:5000` by default.
+1. Builds and tests everything in parallel
+2. Checks if a GitHub Release already exists for the current version
+3. If not — creates a release with both JARs, tags the commit, and uploads the game JAR to the distribution server
 
-### Starting the server
-```bash
-cd server
-pip install -r requirements.txt
-python app.py
-```
-
-The server listens on port 5000. Set `ORBRUNNER_AUTH_TOKEN` to change the upload auth token from the default `changeme`.
-
----
-
-## Building
-
-```bash
-# Build game fat JAR → build/libs/orbrunner-{version}.jar
-./gradlew jar
-
-# Build launcher fat JAR → launcher/build/libs/launcher-1.0.0.jar
-./gradlew :launcher:jar
-```
-
-The game version is read automatically from the last line of `src/main/resources/update_logs/index.txt`.
-
-### Uploading a build to the server
-```bash
-python server/upload.py --server http://localhost:5000 --token changeme
-# For production:
-python server/upload.py --server https://your-server.com --token YOUR_TOKEN
-```
+The official server URL is stored as a `SERVER_URL` repository secret and baked into the launcher JAR at CI build time. To update it, change the secret and run **Actions → Rebuild Launcher**.
 
 ---
 
@@ -108,90 +129,46 @@ python server/upload.py --server https://your-server.com --token YOUR_TOKEN
 
 | Package | Key Files | Description |
 |---|---|---|
-| `game/` | `GamePanel.java` | Main game loop and state machine (`MAIN_MENU → PLAYING → PAUSED → GAME_OVER`) |
-| `game/` | `Player.java` | First-person camera, movement, physics, collision |
-| `game/` | `WorldLoader.java` | Procedural room/tunnel generation, furniture placement |
-| `game/` | `InGameUI.java` | All menus and dialogs rendered in OpenGL |
+| `game/` | `GamePanel.java` | Main game loop and state machine |
+| `game/` | `Player.java` | First-person camera, movement, collision |
+| `game/` | `WorldLoader.java` | Procedural room and tunnel generation |
+| `game/` | `InGameUI.java` | Menus and dialogs rendered in OpenGL |
 | `game/` | `HudRenderer.java` | 2D overlays — minimap, objectives, key count |
 | `game/` | `SoundManager.java` | Audio playback and volume control |
 | `core/` | `RunManager.java` | Save/load runs across sessions |
-| `core/` | `ScoreManager.java` | Best-time persistence (SHA-256 validated) |
-| `core/` | `SettingsManager.java` | Game settings file I/O |
-| `core/` | `BuildManager.java` | Feature flag loading from `build.properties` |
+| `core/` | `ScoreManager.java` | Best-time persistence |
 
 ### Launcher (`launcher/src/main/java/ohio/pugnetgames/chad/launcher/`)
 
 | File | Description |
 |---|---|
-| `LauncherApp.java` | JavaFX entry point, loads CSS stylesheet |
-| `LauncherUI.java` | Full UI — main screen, settings overlay, changelog overlay, progress overlay |
-| `GameManager.java` | HTTP calls to server, local JAR cache management |
+| `LauncherUI.java` | Full UI — main screen, settings, changelog, progress overlays |
+| `GameManager.java` | Server API calls, local JAR cache, version management |
 | `DownloadTask.java` | Threaded download with progress binding |
-| `SettingsManager.java` | Launcher-side settings sync (WatchService for live reload) |
-| `MarkdownRenderer.java` | Parses update log markdown into styled JavaFX nodes |
-
----
-
-## Configuration
-
-### Feature Flags (`src/main/resources/build.properties`)
-```properties
-feature.freecam.enabled=true
-feature.adminpanel.enabled=true
-feature.debuglines.enabled=true
-feature.allbedrooms.enabled=false
-feature.allcourtyards.enabled=false
-```
-
-### Game Settings (`~/.orbCollectorGame/settings.dat`)
-Written by both the launcher and the game. Changes from either side apply immediately while the game is running.
-```
-sensitivity=0.10
-fieldOfView=60.0
-fogDensity=0.07
-masterVolume=1.0
-invertY=false
-```
-
-### Launcher Config (`~/.orbrunner/launcher.json`)
-```json
-{
-  "serverUrl": "http://localhost:5000",
-  "selectedVersion": null,
-  "lastPlayedVersion": null
-}
-```
-
----
-
-## Update Logs
-
-Changelogs live in `src/main/resources/update_logs/` and are displayed in both the in-game changelog panel and the launcher's "Patch Notes" viewer. Each file is plain markdown named after its version (e.g. `v3.2.md`).
-
----
-
-## Feedback & Suggestions
-
-OrbRunner is developed solely by [pugplayzYT](https://github.com/pugplayzYT). Pull requests are not accepted from outside the development team and will be automatically closed.
-
-If you want to help shape the game, open an Issue:
-
-- 🐛 **[Report a bug](../../issues/new?template=bug_report.yml)** — something broken, crashing, or behaving wrong
-- 💡 **[Suggest a feature](../../issues/new?template=feature_suggestion.yml)** — an idea you'd like to see in the game
+| `SettingsManager.java` | Live settings sync via WatchService |
+| `MarkdownRenderer.java` | Renders update logs as styled JavaFX nodes |
 
 ---
 
 ## Dependencies
 
 ### Game
-- [LWJGL 3.3.3](https://www.lwjgl.org/) — OpenGL, GLFW, STB, ASSIMP bindings
-- [JOML](https://github.com/JOML-CI/JOML) — Java OpenGL Math Library
-- [MP3SPI / JLayer](https://www.javazoom.net/) — MP3 audio playback
-- [Gson 2.10.1](https://github.com/google/gson) — JSON serialization
+- [LWJGL 3.3.3](https://www.lwjgl.org/) — OpenGL, GLFW, STB, ASSIMP
+- [MP3SPI / JLayer](https://www.javazoom.net/) — MP3 audio
+- [Gson 2.10.1](https://github.com/google/gson) — JSON
 
 ### Launcher
-- [JavaFX 17.0.2](https://openjfx.io/) — UI framework
+- [JavaFX 17.0.2](https://openjfx.io/)
 - [Gson 2.10.1](https://github.com/google/gson)
 
 ### Server
-- [Flask](https://flask.palletsprojects.com/) — Python web framework
+- [Flask 3+](https://flask.palletsprojects.com/)
+
+---
+
+## Feedback
+
+OrbRunner is developed solely by [pugplayzYT](https://github.com/pugplayzYT). External pull requests are automatically closed.
+
+- 🐛 [Report a bug](../../issues/new?template=bug_report.yml)
+- 💡 [Suggest a feature](../../issues/new?template=feature_suggestion.yml)

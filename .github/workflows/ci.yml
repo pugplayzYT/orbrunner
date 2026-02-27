@@ -52,7 +52,14 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build launcher fat JAR
-        run: ./gradlew :launcher:jar
+        env:
+          ORB_SERVER_URL: ${{ secrets.SERVER_URL }}
+        run: |
+          if [ -n "$ORB_SERVER_URL" ]; then
+            ./gradlew :launcher:jar "-PorbrunnerServerUrl=$ORB_SERVER_URL"
+          else
+            ./gradlew :launcher:jar
+          fi
 
       - name: Upload launcher JAR artifact
         uses: actions/upload-artifact@v4

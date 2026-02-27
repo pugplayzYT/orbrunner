@@ -31,7 +31,8 @@ tasks.withType<JavaCompile> {
 
 // Inject orbrunnerServerUrl from gradle.properties into launcher.properties at build time
 tasks.processResources {
-    val serverUrl = (findProperty("orbrunnerServerUrl") as? String) ?: "http://localhost:5000"
+    val serverUrl = ((findProperty("orbrunnerServerUrl") as? String)?.takeIf { it.isNotBlank() })
+        ?: "http://localhost:5000"
     inputs.property("orbrunnerServerUrl", serverUrl)
     filesMatching("launcher.properties") {
         expand("orbrunnerServerUrl" to serverUrl)

@@ -193,7 +193,8 @@ public class GameManager {
      */
     public String computeLocalHash(String version) {
         Path jar = jarPath(version);
-        if (!Files.exists(jar)) return null;
+        if (!Files.exists(jar))
+            return null;
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             try (InputStream is = Files.newInputStream(jar)) {
@@ -205,7 +206,8 @@ public class GameManager {
             }
             byte[] bytes = digest.digest();
             StringBuilder sb = new StringBuilder(64);
-            for (byte b : bytes) sb.append(String.format("%02x", b));
+            for (byte b : bytes)
+                sb.append(String.format("%02x", b));
             return sb.toString();
         } catch (NoSuchAlgorithmException | IOException e) {
             System.err.println("[GameManager] Hash failed for " + version + ": " + e.getMessage());
@@ -217,21 +219,24 @@ public class GameManager {
      * Check whether the locally cached JAR matches the server's expected hash.
      * Pass the already-fetched server version list to avoid an extra HTTP call.
      *
-     * Returns {@code true}  if the hashes match, or if the server has no hash
-     *                        on record (pre-v3.3 upload) — so old installs are
-     *                        never incorrectly flagged.
+     * Returns {@code true} if the hashes match, or if the server has no hash
+     * on record (pre-v3.3 upload) — so old installs are
+     * never incorrectly flagged.
      * Returns {@code false} if hashes differ — the JAR needs to be re-downloaded.
      */
     public boolean isHashValid(String version, List<VersionInfo> serverVersions) {
-        if (!isInstalled(version)) return false;
+        if (!isInstalled(version))
+            return false;
         String serverHash = serverVersions.stream()
                 .filter(v -> v.version.equals(version))
                 .map(v -> v.hash)
                 .findFirst()
                 .orElse(null);
-        if (serverHash == null || serverHash.isEmpty()) return true; // no hash to check
+        if (serverHash == null || serverHash.isEmpty())
+            return true; // no hash to check
         String localHash = computeLocalHash(version);
-        if (localHash == null) return false;
+        if (localHash == null)
+            return false;
         return serverHash.equals(localHash);
     }
 
@@ -284,7 +289,8 @@ public class GameManager {
             throw new IOException("HTTP " + code + " from " + urlStr);
         }
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(conn.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
             StringBuilder sb = new StringBuilder();
             String line;
             while ((line = reader.readLine()) != null) {

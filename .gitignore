@@ -42,6 +42,9 @@ bin/
 .agent/
 .claude/
 CLAUDE.md
+.gemini/
+GEMINI.md
+Gemini.md
 
 ### Fonts and Useless Stuff ###
 *.ttf
@@ -64,4 +67,4 @@ server/tests/__pycache__/
 
 ### Launcher ###
 launcher/build/
-launcher/.gradle/
+launcher/.gradle/.env

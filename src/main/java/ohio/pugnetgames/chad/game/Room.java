@@ -10,9 +10,9 @@ import java.util.List;
  */
 public class Room {
 
-    /** MODIFIED: Added BEDROOM type. */
+    /** MODIFIED: Added BEDROOM and PADDED_CELL types. */
     public enum RoomType {
-        STANDARD, COURTYARD, BEDROOM
+        STANDARD, COURTYARD, BEDROOM, PADDED_CELL
     }
 
     // The boundaries of the room

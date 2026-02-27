@@ -32,6 +32,38 @@ class RoomTest {
         assertEquals(Room.RoomType.BEDROOM, room.getType());
     }
 
+    @Test
+    void paddedCellTypeIsStored() {
+        Room room = new Room(0, 0, 10, 10, Room.RoomType.PADDED_CELL);
+        assertEquals(Room.RoomType.PADDED_CELL, room.getType());
+    }
+
+    @Test
+    void fourRoomTypesExist() {
+        assertEquals(4, Room.RoomType.values().length,
+            "There should be exactly 4 room types: STANDARD, COURTYARD, BEDROOM, PADDED_CELL");
+    }
+
+    @Test
+    void paddedCellHasCorrectDimensions() {
+        Room room = new Room(-5.0f, -8.0f, 5.0f, 8.0f, Room.RoomType.PADDED_CELL);
+        assertEquals(10.0f, room.getWidth(), 0.001f);
+        assertEquals(16.0f, room.getDepth(), 0.001f);
+    }
+
+    @Test
+    void paddedCellStartsWithAllWallsOpen() {
+        Room room = new Room(0, 0, 10, 10, Room.RoomType.PADDED_CELL);
+        assertEquals(4, room.getAvailableWalls().size());
+    }
+
+    @Test
+    void paddedCellKeySpawnLocationsEmptyByDefault() {
+        Room room = new Room(0, 0, 10, 10, Room.RoomType.PADDED_CELL);
+        assertTrue(room.keySpawnLocations.isEmpty(),
+            "PADDED_CELL rooms have no furniture so key spawn list should be empty");
+    }
+
     // -------------------------------------------------------------------------
     // Center & dimensions
     // -------------------------------------------------------------------------

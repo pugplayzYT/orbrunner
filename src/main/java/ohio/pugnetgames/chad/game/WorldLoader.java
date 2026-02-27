@@ -77,6 +77,7 @@ public class WorldLoader {
     private int orbTextureID;
     private int woodTextureID;
     private int sheetsTextureID;
+    private int tileTextureID;
 
     /** Returns the seed used in the most recent {@link #generateWorld} call. */
     public long getLastSeed() {
@@ -87,7 +88,7 @@ public class WorldLoader {
      * Creates and returns a World object using a specific seed (for run save/load).
      */
     public World generateWorld(int wallTextureID, int orbTextureID, int woodTextureID,
-                               int sheetsTextureID, long seed) {
+                               int sheetsTextureID, int tileTextureID, long seed) {
         this.lastSeed  = seed;
         this.random    = new Random(seed);
         this.staticObjects        = new ArrayList<>();
@@ -97,6 +98,7 @@ public class WorldLoader {
         this.orbTextureID    = orbTextureID;
         this.woodTextureID   = woodTextureID;
         this.sheetsTextureID = sheetsTextureID;
+        this.tileTextureID   = tileTextureID;
         this.forceCourtyards = BuildManager.getBoolean("feature.allcourtyards.enabled");
         this.forceBedrooms   = BuildManager.getBoolean("feature.allbedrooms.enabled");
         return buildWorld();
@@ -105,7 +107,8 @@ public class WorldLoader {
     /**
      * Creates and returns a World object containing all static GameObjects and room data.
      */
-    public World generateWorld(int wallTextureID, int orbTextureID, int woodTextureID, int sheetsTextureID) {
+    public World generateWorld(int wallTextureID, int orbTextureID, int woodTextureID,
+                               int sheetsTextureID, int tileTextureID) {
         this.lastSeed        = new Random().nextLong();
         this.random          = new Random(lastSeed);
         this.staticObjects   = new ArrayList<>();
@@ -115,6 +118,7 @@ public class WorldLoader {
         this.orbTextureID    = orbTextureID;
         this.woodTextureID   = woodTextureID;
         this.sheetsTextureID = sheetsTextureID;
+        this.tileTextureID   = tileTextureID;
         this.forceCourtyards = BuildManager.getBoolean("feature.allcourtyards.enabled");
         this.forceBedrooms   = BuildManager.getBoolean("feature.allbedrooms.enabled");
         return buildWorld();
@@ -173,8 +177,9 @@ public class WorldLoader {
                 Direction buildDirection = availableWalls.get(random.nextInt(availableWalls.size()));
 
                 boolean isEscapeTunnel = allRooms.size() == totalRoomsToGenerate - 1;
-                boolean isCourtyard = false;
-                boolean isBedroom = false;
+                boolean isCourtyard   = false;
+                boolean isBedroom     = false;
+                boolean isPaddedCell  = false;
 
                 if (!isEscapeTunnel) {
                     if (this.forceBedrooms) {
@@ -187,11 +192,14 @@ public class WorldLoader {
                             isCourtyard = true;
                         } else {
                             isBedroom = random.nextInt(10) == 0; // 1 in 10
+                            if (!isBedroom) {
+                                isPaddedCell = random.nextInt(8) == 0; // 1 in 8 of remaining
+                            }
                         }
                     }
                 }
 
-                Room newRoom = buildTunnelAndNextRoom(currentRoom, buildDirection, isCourtyard, isBedroom, isEscapeTunnel);
+                Room newRoom = buildTunnelAndNextRoom(currentRoom, buildDirection, isCourtyard, isBedroom, isPaddedCell, isEscapeTunnel);
 
                 if (newRoom != null || (newRoom == null && isEscapeTunnel)) {
                     if (newRoom != null) {
@@ -228,8 +236,9 @@ public class WorldLoader {
             if (room.getType() == RoomType.COURTYARD) {
                 generateTreesForRoom(room);
             } else if (room.getType() == RoomType.BEDROOM) {
-                generateBedForRoom(room); // 💥 This is the modified method 💥
+                generateBedForRoom(room);
             }
+            // PADDED_CELL rooms are intentionally empty — the bare tiled walls are the feature.
         }
 
         log("generateWorld", "Returning new World with " + staticObjects.size() + " static objects.");
@@ -245,6 +254,8 @@ public class WorldLoader {
             floorTexture = orbTextureID;
         } else if (room.getType() == RoomType.BEDROOM) {
             floorTexture = woodTextureID;
+        } else if (room.getType() == RoomType.PADDED_CELL) {
+            floorTexture = tileTextureID;
         } else {
             floorTexture = wallTextureID;
         }
@@ -254,8 +265,10 @@ public class WorldLoader {
         staticObjects.add(floor);
         log("buildRoomFloorAndRoof", "Added " + roomType + " Floor at " + pos(floor));
 
-        if (room.getType() == RoomType.STANDARD || room.getType() == RoomType.BEDROOM) {
-            GameObject roof = new GameObject(ShapeType.CUBE, room.getCenterX(), WALL_HEIGHT, room.getCenterZ(), room.getWidth(), WALL_THICKNESS, room.getDepth(), wallTextureID);
+        if (room.getType() == RoomType.STANDARD || room.getType() == RoomType.BEDROOM
+                || room.getType() == RoomType.PADDED_CELL) {
+            int roofTex = room.getType() == RoomType.PADDED_CELL ? tileTextureID : wallTextureID;
+            GameObject roof = new GameObject(ShapeType.CUBE, room.getCenterX(), WALL_HEIGHT, room.getCenterZ(), room.getWidth(), WALL_THICKNESS, room.getDepth(), roofTex);
             staticObjects.add(roof);
             log("buildRoomFloorAndRoof", "Added " + roomType + " Roof at " + pos(roof));
         }
@@ -423,7 +436,9 @@ public class WorldLoader {
         String roomType = room.getType().toString();
         log("buildRoomWalls", "Building " + roomType + " walls for room at " + room.getCenterX() + ", " + room.getCenterZ());
 
-        int wallTex = room.getType() == RoomType.COURTYARD ? 0 : wallTextureID;
+        int wallTex = room.getType() == RoomType.COURTYARD ? 0
+                    : room.getType() == RoomType.PADDED_CELL ? tileTextureID
+                    : wallTextureID;
         float wallHeight = room.getType() == RoomType.COURTYARD ? 100.0f : WALL_HEIGHT;
         boolean collidable = true;
         boolean renderable = room.getType() != RoomType.COURTYARD;
@@ -457,7 +472,7 @@ public class WorldLoader {
     /**
      * Generation function. Creates a tunnel and a new room object.
      */
-    private Room buildTunnelAndNextRoom(Room fromRoom, Direction direction, boolean isCourtyard, boolean isBedroom, boolean isEscapeTunnel) {
+    private Room buildTunnelAndNextRoom(Room fromRoom, Direction direction, boolean isCourtyard, boolean isBedroom, boolean isPaddedCell, boolean isEscapeTunnel) {
         fromRoom.markWallUsed(direction);
 
         float tunnelLength = randRange(MIN_TUNNEL_LENGTH, MAX_TUNNEL_LENGTH);
@@ -518,6 +533,8 @@ public class WorldLoader {
                 type = RoomType.COURTYARD;
             } else if (isBedroom) {
                 type = RoomType.BEDROOM;
+            } else if (isPaddedCell) {
+                type = RoomType.PADDED_CELL;
             } else {
                 type = RoomType.STANDARD;
             }

@@ -70,8 +70,9 @@ public class GamePanel extends Thread {
 
     // --- HORROR FIELDS ---
     private float horrorLevel = 0.0f;
-    private final float HORROR_RATE_STANDARD = 0.005f;
-    private final float HORROR_RATE_COURTYARD = 0.001f;
+    private final float HORROR_RATE_STANDARD    = 0.005f;
+    private final float HORROR_RATE_COURTYARD   = 0.001f;
+    private final float HORROR_RATE_PADDED_CELL = 0.012f; // Highest — empty tiled rooms are deeply unsettling
     private final String CRACKLE_SOUND_FILE = "crackle.mp3";
 
     // --- OBJECTIVE / HUD FIELDS ---
@@ -117,6 +118,7 @@ public class GamePanel extends Thread {
     private int wallTextureID;
     private int woodTextureID;
     private int sheetsTextureID;
+    private int tileTextureID;
     private Map<String, Integer> loadedTextures = new HashMap<>();
 
     // --- Game State ---
@@ -224,10 +226,11 @@ public class GamePanel extends Thread {
             }
         }
 
-        orbTextureID = loadedTextures.getOrDefault("orb_texture.png", 0);
-        wallTextureID = loadedTextures.getOrDefault("tunnel_texture.png", 0);
-        woodTextureID = loadedTextures.getOrDefault("wood_texture.png", 0);
+        orbTextureID    = loadedTextures.getOrDefault("orb_texture.png", 0);
+        wallTextureID   = loadedTextures.getOrDefault("tunnel_texture.png", 0);
+        woodTextureID   = loadedTextures.getOrDefault("wood_texture.png", 0);
         sheetsTextureID = loadedTextures.getOrDefault("sheets_texture.png", 0);
+        tileTextureID   = loadedTextures.getOrDefault("tile_texture.png", 0);
 
         // Initialize game systems that persist across rounds
         runManager  = new RunManager();
@@ -768,8 +771,8 @@ public class GamePanel extends Thread {
 
         // World Gen
         world = (seed == -1L)
-            ? worldLoader.generateWorld(wallTextureID, orbTextureID, woodTextureID, sheetsTextureID)
-            : worldLoader.generateWorld(wallTextureID, orbTextureID, woodTextureID, sheetsTextureID, seed);
+            ? worldLoader.generateWorld(wallTextureID, orbTextureID, woodTextureID, sheetsTextureID, tileTextureID)
+            : worldLoader.generateWorld(wallTextureID, orbTextureID, woodTextureID, sheetsTextureID, tileTextureID, seed);
         this.escapeDoor = world.getEscapeDoor();
         this.winTrigger = world.getWinTrigger();
 
@@ -963,6 +966,8 @@ public class GamePanel extends Thread {
             Room currentRoom = getPlayerCurrentRoom();
             if (currentRoom != null && currentRoom.getType() == RoomType.COURTYARD) {
                 horrorLevel += HORROR_RATE_COURTYARD;
+            } else if (currentRoom != null && currentRoom.getType() == RoomType.PADDED_CELL) {
+                horrorLevel += HORROR_RATE_PADDED_CELL;
             } else {
                 horrorLevel += HORROR_RATE_STANDARD;
             }

@@ -7,3 +7,4 @@ v2.0.md
 v2.1.md
 v3.0.md
 v3.1.md
+v3.2.md

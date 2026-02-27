@@ -16,10 +16,11 @@ public class HudRenderer {
     private FontRenderer fontRenderer;
 
     // --- 💥 NEW: Color Definitions for Room Types (RGB) 💥 ---
-    private final float[] STANDARD_COLOR = {0.5f, 0.5f, 0.5f}; // Grey
-    private final float[] COURTYARD_COLOR = {0.0f, 0.3f, 0.0f}; // Dark Green
-    private final float[] BEDROOM_COLOR = {0.55f, 0.27f, 0.07f}; // Chocolate Brown
-    private final float[] TUNNEL_COLOR = {0.4f, 0.4f, 0.4f}; // Slightly darker grey for tunnels
+    private final float[] STANDARD_COLOR     = {0.5f, 0.5f, 0.5f};   // Grey
+    private final float[] COURTYARD_COLOR    = {0.0f, 0.3f, 0.0f};   // Dark Green
+    private final float[] BEDROOM_COLOR      = {0.55f, 0.27f, 0.07f}; // Chocolate Brown
+    private final float[] PADDED_CELL_COLOR  = {0.88f, 0.88f, 0.92f}; // Off-white / pale blue-grey
+    private final float[] TUNNEL_COLOR       = {0.4f, 0.4f, 0.4f};   // Slightly darker grey for tunnels
     // --- 💥 END NEW 💥 ---
 
     public void init() {
@@ -156,6 +157,8 @@ public class HudRenderer {
                 return COURTYARD_COLOR;
             case BEDROOM:
                 return BEDROOM_COLOR;
+            case PADDED_CELL:
+                return PADDED_CELL_COLOR;
             default:
                 return STANDARD_COLOR;
         }

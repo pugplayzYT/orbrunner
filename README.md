@@ -1,3 +1,13 @@
+> [!CAUTION]
+> ## ⛔ External Pull Requests Are Not Accepted
+> OrbRunner is a solo-developed project. **Pull requests from outside the development team are automatically closed** — no exceptions.
+>
+> Forking this repository to create your own version or competing project is also **not permitted** under the license.
+>
+> **If you have a bug report or feature suggestion, please use Issues:**
+> - 🐛 [Report a bug](../../issues/new?template=bug_report.yml)
+> - 💡 [Suggest a feature](../../issues/new?template=feature_suggestion.yml)
+
 # OrbRunner
 
 A 3D first-person maze escape game built with LWJGL (OpenGL/Java). Navigate procedurally generated rooms, collect keys, and find the exit. The project ships as three components: the game itself, a JavaFX launcher for version management, and a Flask distribution server.
@@ -160,56 +170,14 @@ Changelogs live in `src/main/resources/update_logs/` and are displayed in both t
 
 ---
 
-## Contributing
+## Feedback & Suggestions
 
-Contributions are welcome via pull request. Please read the license before contributing — forks that create competing/independent projects are not permitted, but PRs to this repository are.
+OrbRunner is developed solely by [pugplayzYT](https://github.com/pugplayzYT). Pull requests are not accepted from outside the development team and will be automatically closed.
 
-### Rules
+If you want to help shape the game, open an Issue:
 
-1. **Every PR that changes source code must include a changelog entry.** The CI will block your PR if you forget. Pure docs, CI, or test-only changes are exempt.
-2. Keep changes focused — one feature or fix per PR.
-3. Match the existing code style.
-
-### How to write a changelog entry
-
-**1. Create the file** at `src/main/resources/update_logs/vX.X.md`:
-
-```markdown
-# vX.X - Short Description
-## Release Date: Month Day, Year
-
-One sentence describing the overall change.
-
-### What's New
-- Feature or addition
-
-### Fixes
-- Bug that was fixed
-
-### Technical
-- Internal change worth noting (optional)
-```
-
-Use the version numbering convention:
-- `+0.1` — bug fixes, small tweaks
-- `+0.25` — new features, significant changes
-- `+1.0` — major new systems
-
-**2. Register it** by adding the filename on a new line at the bottom of `src/main/resources/update_logs/index.txt`:
-
-```
-v3.1.md
-v3.2.md   ← add new entries here
-```
-
-The in-game update log and the launcher's Patch Notes viewer both read from this index file, newest-last (they reverse the order on display).
-
-### PR checklist
-
-- [ ] Source code changes have a corresponding `vX.X.md` in `update_logs/`
-- [ ] `index.txt` updated with the new filename
-- [ ] `./gradlew jar` and `./gradlew :launcher:jar` build cleanly
-- [ ] Server tests pass: `pytest server/tests/ -v`
+- 🐛 **[Report a bug](../../issues/new?template=bug_report.yml)** — something broken, crashing, or behaving wrong
+- 💡 **[Suggest a feature](../../issues/new?template=feature_suggestion.yml)** — an idea you'd like to see in the game
 
 ---
 

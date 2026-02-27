@@ -14,6 +14,21 @@ import sys
 import requests
 
 
+def _load_env(env_path: str) -> dict:
+    """Parse a simple KEY=value .env file, ignoring blank lines and comments."""
+    result = {}
+    if not os.path.exists(env_path):
+        return result
+    with open(env_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            result[key.strip()] = value.strip()
+    return result
+
+
 def get_current_version(project_root: str) -> str:
     """Read the latest version from update_logs/index.txt."""
     index_path = os.path.join(project_root, "src", "main", "resources", "update_logs", "index.txt")
@@ -83,19 +98,30 @@ def upload_jar(server_url: str, token: str, version: str, jar_path: str):
 
 def main():
     parser = argparse.ArgumentParser(description="Build and upload OrbRunner to the distribution server")
-    parser.add_argument("--server", required=True, help="Server URL (e.g. http://localhost:5000)")
+    parser.add_argument("--server", default=None, help="Server URL (default: ORBRUNNER_SERVER_URL from server/.env)")
     parser.add_argument("--token", default=None, help="Auth token for the upload endpoint (default: read from server/.auth_token)")
     parser.add_argument("--version", help="Version string (default: read from index.txt)")
     parser.add_argument("--skip-build", action="store_true", help="Skip the build step, upload existing JAR")
     args = parser.parse_args()
 
     # Determine project root (assumes this script is in server/)
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    server_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(server_dir)
+
+    # Load .env for defaults
+    env = _load_env(os.path.join(server_dir, ".env"))
+
+    # Resolve server URL
+    server_url = args.server or env.get("ORBRUNNER_SERVER_URL")
+    if not server_url:
+        print("[!] No --server provided and ORBRUNNER_SERVER_URL not set in server/.env")
+        sys.exit(1)
+    print(f"[*] Server: {server_url}")
 
     # Resolve auth token
     token = args.token
     if token is None:
-        token_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".auth_token")
+        token_file = os.path.join(server_dir, ".auth_token")
         if os.path.exists(token_file):
             with open(token_file) as _tf:
                 token = _tf.read().strip()
@@ -118,7 +144,7 @@ def main():
     else:
         jar_path = build_jar(project_root)
 
-    upload_jar(args.server, token, version, jar_path)
+    upload_jar(server_url, token, version, jar_path)
 
 
 if __name__ == "__main__":

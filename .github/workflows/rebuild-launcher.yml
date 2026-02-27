@@ -20,6 +20,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -53,5 +55,5 @@ jobs:
         with:
           tag_name: ${{ env.VERSION }}
           files: launcher/build/libs/launcher-*.jar
-          allow_updates: true
+          overwrite_files: true
           fail_on_unmatched_files: true

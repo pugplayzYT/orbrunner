@@ -7,6 +7,7 @@ import os
 import re
 import json
 import time
+import hashlib
 from flask import Flask, request, jsonify, send_file, abort, Response, render_template
 
 app = Flask(__name__)
@@ -25,10 +26,24 @@ os.makedirs(LAUNCHER_DIR,   exist_ok=True)
 
 
 def _load_metadata():
-    """Load the version metadata JSON, or return an empty structure."""
+    """Load the version metadata JSON, or return an empty structure.
+    Backfills any missing SHA-256 hashes for JARs that were uploaded before
+    hash tracking was introduced.
+    """
     if os.path.exists(METADATA_FILE):
         with open(METADATA_FILE, "r") as f:
-            return json.load(f)
+            data = json.load(f)
+        # Backfill missing hashes for pre-existing JARs
+        changed = False
+        for v in data.get("versions", []):
+            if not v.get("hash"):
+                jar = _jar_path(v["version"])
+                if os.path.exists(jar):
+                    v["hash"] = _compute_hash(jar)
+                    changed = True
+        if changed:
+            _save_metadata(data)
+        return data
     return {"versions": []}
 
 
@@ -41,6 +56,15 @@ def _save_metadata(data):
 def _jar_path(version: str) -> str:
     """Return the expected JAR file path for a given version string."""
     return os.path.join(VERSIONS_DIR, f"orbrunner-{version}.jar")
+
+
+def _compute_hash(filepath: str) -> str:
+    """Compute the SHA-256 hash of a file and return it as a hex string."""
+    sha256 = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            sha256.update(chunk)
+    return sha256.hexdigest()
 
 
 # ──────────────────────────────────────────────
@@ -119,6 +143,7 @@ def upload_version():
     dest = _jar_path(version)
     jar_file.save(dest)
     file_size = os.path.getsize(dest)
+    file_hash = _compute_hash(dest)
 
     # Update metadata
     meta = _load_metadata()
@@ -130,6 +155,7 @@ def upload_version():
         "version": version,
         "size": file_size,
         "uploaded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "hash": file_hash,
     })
 
     # Sort by version string (works for vX.X format)
@@ -140,6 +166,7 @@ def upload_version():
         "status": "ok",
         "version": version,
         "size": file_size,
+        "hash": file_hash,
     }), 201
 
 

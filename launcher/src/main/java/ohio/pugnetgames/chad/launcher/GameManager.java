@@ -8,6 +8,8 @@ import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
 /**
@@ -183,6 +185,56 @@ public class GameManager {
         saveConfig();
     }
 
+    // ─── Hash Verification ───
+
+    /**
+     * Compute the SHA-256 hash of the locally cached JAR for a given version.
+     * Returns null if the file is missing or hashing fails.
+     */
+    public String computeLocalHash(String version) {
+        Path jar = jarPath(version);
+        if (!Files.exists(jar)) return null;
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (InputStream is = Files.newInputStream(jar)) {
+                byte[] buffer = new byte[65536];
+                int read;
+                while ((read = is.read(buffer)) != -1) {
+                    digest.update(buffer, 0, read);
+                }
+            }
+            byte[] bytes = digest.digest();
+            StringBuilder sb = new StringBuilder(64);
+            for (byte b : bytes) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (NoSuchAlgorithmException | IOException e) {
+            System.err.println("[GameManager] Hash failed for " + version + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Check whether the locally cached JAR matches the server's expected hash.
+     * Pass the already-fetched server version list to avoid an extra HTTP call.
+     *
+     * Returns {@code true}  if the hashes match, or if the server has no hash
+     *                        on record (pre-v3.3 upload) — so old installs are
+     *                        never incorrectly flagged.
+     * Returns {@code false} if hashes differ — the JAR needs to be re-downloaded.
+     */
+    public boolean isHashValid(String version, List<VersionInfo> serverVersions) {
+        if (!isInstalled(version)) return false;
+        String serverHash = serverVersions.stream()
+                .filter(v -> v.version.equals(version))
+                .map(v -> v.hash)
+                .findFirst()
+                .orElse(null);
+        if (serverHash == null || serverHash.isEmpty()) return true; // no hash to check
+        String localHash = computeLocalHash(version);
+        if (localHash == null) return false;
+        return serverHash.equals(localHash);
+    }
+
     // ─── Changelog ───
 
     /**
@@ -254,6 +306,7 @@ public class GameManager {
         public String version;
         public long size;
         public String uploaded_at;
+        public String hash; // SHA-256 hex digest; null for versions uploaded before v3.3
 
         @Override
         public String toString() {

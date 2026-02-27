@@ -53,6 +53,9 @@ public class LauncherUI {
     // Suppresses re-saving when we're the ones loading from file
     private boolean updatingFromFile = false;
 
+    // Suppresses onVersionSelected() firing during programmatic combo updates
+    private boolean refreshing = false;
+
     public LauncherUI(Stage stage) {
         this.stage = stage;
         this.gameManager = new GameManager();
@@ -489,24 +492,41 @@ public class LauncherUI {
             List<GameManager.VersionInfo> versions = gameManager.getAvailableVersions();
             boolean hasAny = gameManager.hasAnyInstall();
 
+            // Determine which version the state machine will act on (mirrors
+            // getSelectedVersion logic, but usable from the background thread).
+            String targetVersion;
+            if (previousSelection != null && !previousSelection.isEmpty()) {
+                targetVersion = previousSelection;
+            } else {
+                String cfg = gameManager.getConfig().selectedVersion;
+                targetVersion = cfg != null ? cfg : (latest != null ? latest.version : null);
+            }
+
+            // Hash check is disk I/O — do it here in the background thread.
+            // Only meaningful when the version is already installed locally.
+            final boolean hashValid = (targetVersion != null && gameManager.isInstalled(targetVersion))
+                    ? gameManager.isHashValid(targetVersion, versions)
+                    : true;
+
             Platform.runLater(() -> {
+                // --- Suppress onVersionSelected while we reprogram the combo ---
+                refreshing = true;
                 versionCombo.getItems().clear();
                 if (!versions.isEmpty()) {
                     List<String> versionStrings = versions.stream()
                             .map(v -> v.version)
                             .collect(Collectors.toList());
-                    // Latest first
-                    Collections.reverse(versionStrings);
+                    Collections.reverse(versionStrings); // latest first
                     versionCombo.getItems().addAll(versionStrings);
                     setServerOnline(true);
                 } else {
                     setServerOnline(false);
                 }
-
-                // Restore previous selection if it's still in the list
                 if (previousSelection != null && versionCombo.getItems().contains(previousSelection)) {
                     versionCombo.setValue(previousSelection);
                 }
+                refreshing = false;
+                // -----------------------------------------------------------------
 
                 if (latest != null) {
                     versionInfoLabel.setText("Latest: " + latest.version);
@@ -518,6 +538,10 @@ public class LauncherUI {
                     } else if (!gameManager.isInstalled(selectedVersion)) {
                         actionButton.setText("DOWNLOAD");
                         statusLabel.setText(selectedVersion + " needs to be downloaded");
+                    } else if (!hashValid && selectedVersion.equals(targetVersion)) {
+                        // Installed but server has a newer build under the same version tag
+                        actionButton.setText("REINSTALL");
+                        statusLabel.setText(selectedVersion + " has been updated — reinstall required");
                     } else if (gameManager.needsUpdate() && selectedVersion.equals(latest.version)) {
                         actionButton.setText("UPDATE");
                         statusLabel.setText("Update available: " + latest.version);
@@ -578,6 +602,7 @@ public class LauncherUI {
             case "INSTALL":
             case "DOWNLOAD":
             case "UPDATE":
+            case "REINSTALL":
                 startDownload(version);
                 break;
             case "PLAY":
@@ -649,17 +674,37 @@ public class LauncherUI {
     }
 
     private void onVersionSelected() {
+        if (refreshing) return; // ignore programmatic updates during refreshState()
         String selected = versionCombo.getValue();
-        if (selected != null) {
-            gameManager.setSelectedVersion(selected);
-            if (gameManager.isInstalled(selected)) {
-                actionButton.setText("PLAY");
-                statusLabel.setText("Ready to launch " + selected);
-            } else {
-                actionButton.setText("DOWNLOAD");
-                statusLabel.setText(selected + " needs to be downloaded");
-            }
+        if (selected == null) return;
+
+        gameManager.setSelectedVersion(selected);
+
+        if (!gameManager.isInstalled(selected)) {
+            actionButton.setText("DOWNLOAD");
+            statusLabel.setText(selected + " needs to be downloaded");
+            return;
         }
+
+        // Version is installed — verify hash in background before showing PLAY
+        actionButton.setText("PLAY");
+        statusLabel.setText("Verifying " + selected + "...");
+        actionButton.setDisable(true);
+
+        new Thread(() -> {
+            List<GameManager.VersionInfo> versions = gameManager.getAvailableVersions();
+            boolean hashValid = gameManager.isHashValid(selected, versions);
+            Platform.runLater(() -> {
+                if (!hashValid) {
+                    actionButton.setText("REINSTALL");
+                    statusLabel.setText(selected + " has been updated — reinstall required");
+                } else {
+                    actionButton.setText("PLAY");
+                    statusLabel.setText("Ready to launch " + selected);
+                }
+                actionButton.setDisable(false);
+            });
+        }).start();
     }
 
     // ──────────────────────────────────────────────

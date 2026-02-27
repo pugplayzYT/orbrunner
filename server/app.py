@@ -7,18 +7,21 @@ import os
 import re
 import json
 import time
-from flask import Flask, request, jsonify, send_file, abort, Response
+from flask import Flask, request, jsonify, send_file, abort, Response, render_template
 
 app = Flask(__name__)
 
 # --- Configuration ---
-VERSIONS_DIR   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "versions")
+BASE_DIR       = os.path.dirname(os.path.abspath(__file__))
+VERSIONS_DIR   = os.path.join(BASE_DIR, "versions")
 METADATA_FILE  = os.path.join(VERSIONS_DIR, "metadata.json")
-CHANGELOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "changelogs")
+CHANGELOGS_DIR = os.path.join(BASE_DIR, "changelogs")
+LAUNCHER_DIR   = os.path.join(BASE_DIR, "launcher")
 AUTH_TOKEN     = os.environ.get("ORBRUNNER_AUTH_TOKEN", "changeme")
 
 os.makedirs(VERSIONS_DIR,   exist_ok=True)
 os.makedirs(CHANGELOGS_DIR, exist_ok=True)
+os.makedirs(LAUNCHER_DIR,   exist_ok=True)
 
 
 def _load_metadata():
@@ -156,18 +159,27 @@ def _version_sort_key(version_str: str):
     return tuple(result)
 
 
+@app.route("/download/launcher", methods=["GET"])
+def download_launcher():
+    """Download the launcher JAR."""
+    jar = os.path.join(LAUNCHER_DIR, "orbrunner-launcher.jar")
+    if not os.path.exists(jar):
+        abort(404, description="Launcher not available yet — check back soon.")
+    return send_file(
+        jar,
+        mimetype="application/java-archive",
+        as_attachment=True,
+        download_name="orbrunner-launcher.jar",
+    )
+
+
 @app.route("/", methods=["GET"])
 def index():
-    """Simple landing page."""
-    return jsonify({
-        "name": "OrbRunner Distribution Server",
-        "endpoints": {
-            "/api/versions": "GET — list all versions",
-            "/api/latest": "GET — get latest version info",
-            "/api/download/<version>": "GET — download a version JAR",
-            "/api/upload": "POST — upload a new version (requires auth)",
-        },
-    })
+    """Game landing page."""
+    meta = _load_metadata()
+    latest = meta["versions"][-1]["version"] if meta["versions"] else None
+    launcher_available = os.path.exists(os.path.join(LAUNCHER_DIR, "orbrunner-launcher.jar"))
+    return render_template("index.html", latest_version=latest, launcher_available=launcher_available)
 
 
 if __name__ == "__main__":

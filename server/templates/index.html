@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrbRunner</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: #0d0f18;
+            color: #c1cfe0;
+            font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Nav ── */
+        nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 60px;
+            border-bottom: 1px solid #1a2133;
+        }
+        .nav-logo {
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.2em;
+            color: #ffffff;
+        }
+        .nav-version {
+            font-size: 12px;
+            color: #4a5568;
+        }
+        {% if latest_version %}
+        .nav-version span {
+            color: #2f9e44;
+            font-weight: 600;
+        }
+        {% endif %}
+
+        /* ── Hero ── */
+        .hero {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 80px 40px 60px;
+            gap: 0;
+        }
+
+        .hero-tag {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.25em;
+            color: #1971c2;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+
+        .hero-title {
+            font-size: clamp(52px, 8vw, 96px);
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            color: #ffffff;
+            line-height: 1;
+            margin-bottom: 24px;
+        }
+
+        .hero-subtitle {
+            font-size: 18px;
+            color: #6b7a8d;
+            max-width: 480px;
+            line-height: 1.6;
+            margin-bottom: 48px;
+        }
+
+        /* ── Download Block ── */
+        .download-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: #1971c2;
+            color: #ffffff;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            padding: 16px 44px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .download-btn:hover { background: #1864ab; }
+        .download-btn.unavailable {
+            background: #1a2133;
+            color: #4a5568;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        .download-btn svg {
+            flex-shrink: 0;
+        }
+
+        .download-note {
+            font-size: 12px;
+            color: #4a5568;
+        }
+        .download-note a {
+            color: #4dabf7;
+            text-decoration: none;
+        }
+        .download-note a:hover { text-decoration: underline; }
+
+        .redirect-msg {
+            display: none;
+            font-size: 13px;
+            color: #6b7a8d;
+            text-align: center;
+        }
+        .redirect-msg.visible { display: block; }
+        .redirect-msg .manual-link {
+            color: #4dabf7;
+            text-decoration: none;
+        }
+        .redirect-msg .manual-link:hover { text-decoration: underline; }
+
+        /* ── Divider ── */
+        .divider {
+            width: 100%;
+            max-width: 820px;
+            margin: 60px auto 0;
+            border: none;
+            border-top: 1px solid #1a2133;
+        }
+
+        /* ── Features ── */
+        .features {
+            max-width: 820px;
+            margin: 0 auto;
+            padding: 56px 40px;
+            width: 100%;
+        }
+        .features-heading {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.2em;
+            color: #4a5568;
+            text-transform: uppercase;
+            text-align: center;
+            margin-bottom: 36px;
+        }
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+        }
+        .feature-card {
+            background: #111420;
+            border: 1px solid #1a2133;
+            border-radius: 8px;
+            padding: 22px 24px;
+        }
+        .feature-icon {
+            font-size: 22px;
+            margin-bottom: 10px;
+        }
+        .feature-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 6px;
+        }
+        .feature-desc {
+            font-size: 12px;
+            color: #4a5568;
+            line-height: 1.6;
+        }
+
+        /* ── How to play ── */
+        .how-to {
+            max-width: 820px;
+            margin: 0 auto;
+            padding: 0 40px 72px;
+            width: 100%;
+        }
+        .how-to-heading {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.2em;
+            color: #4a5568;
+            text-transform: uppercase;
+            margin-bottom: 24px;
+        }
+        .steps {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            border: 1px solid #1a2133;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .step {
+            display: flex;
+            align-items: flex-start;
+            gap: 18px;
+            padding: 18px 24px;
+            border-bottom: 1px solid #1a2133;
+            background: #111420;
+        }
+        .step:last-child { border-bottom: none; }
+        .step-num {
+            flex-shrink: 0;
+            width: 24px;
+            height: 24px;
+            background: #1a2d47;
+            color: #4dabf7;
+            font-size: 11px;
+            font-weight: 700;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 1px;
+        }
+        .step-text {
+            font-size: 13px;
+            color: #8899aa;
+            line-height: 1.5;
+        }
+        .step-text strong { color: #c1cfe0; font-weight: 600; }
+        .step-text code {
+            background: #1a2133;
+            color: #4dabf7;
+            font-family: "Consolas", "Courier New", monospace;
+            font-size: 12px;
+            padding: 2px 7px;
+            border-radius: 3px;
+        }
+
+        /* ── Footer ── */
+        footer {
+            border-top: 1px solid #1a2133;
+            padding: 20px 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #2a3347;
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <span class="nav-logo">ORBRUNNER</span>
+    <span class="nav-version">
+        {% if latest_version %}
+            Latest: <span>{{ latest_version }}</span>
+        {% else %}
+            No builds available
+        {% endif %}
+    </span>
+</nav>
+
+<section class="hero">
+    <p class="hero-tag">3D Maze Escape &nbsp;·&nbsp; First Person &nbsp;·&nbsp; Procedural</p>
+    <h1 class="hero-title">ORBRUNNER</h1>
+    <p class="hero-subtitle">Navigate procedurally generated rooms, collect every key, and find the exit before the maze swallows you whole.</p>
+
+    <div class="download-block">
+        {% if launcher_available %}
+        <a href="/download/launcher" class="download-btn" id="downloadBtn" onclick="handleDownload(event)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 1v9M4.5 6.5L8 10l3.5-3.5M2 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Download Launcher
+        </a>
+        {% else %}
+        <span class="download-btn unavailable">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 1v9M4.5 6.5L8 10l3.5-3.5M2 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Launcher Coming Soon
+        </span>
+        {% endif %}
+
+        <p class="download-note">Requires Java 17 or newer &nbsp;·&nbsp; Windows / macOS / Linux</p>
+
+        <p class="redirect-msg" id="redirectMsg">
+            Your download should start automatically.
+            If it doesn't, <a href="/download/launcher" class="manual-link">click here to download manually</a>.
+        </p>
+    </div>
+
+    <hr class="divider">
+</section>
+
+<section class="features">
+    <p class="features-heading">What's in the game</p>
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon">🗺️</div>
+            <div class="feature-title">Procedural Generation</div>
+            <div class="feature-desc">Every run generates a unique seed-based maze. No two layouts are the same.</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">💾</div>
+            <div class="feature-title">Save &amp; Resume</div>
+            <div class="feature-desc">Runs persist across sessions. Pick up exactly where you left off, keys and all.</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🔑</div>
+            <div class="feature-title">Key Collection</div>
+            <div class="feature-desc">Hunt down every key hidden across rooms before the escape door will open.</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🎮</div>
+            <div class="feature-title">First-Person 3D</div>
+            <div class="feature-desc">Full OpenGL rendering. Every menu and HUD element is drawn in-engine.</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🔊</div>
+            <div class="feature-title">Atmospheric Audio</div>
+            <div class="feature-desc">Looping ambient soundtrack with horror sound effects that build tension.</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">⏱️</div>
+            <div class="feature-title">Best Times</div>
+            <div class="feature-desc">Race the clock on Easy or Hard. Your fastest completion time is saved locally.</div>
+        </div>
+    </div>
+</section>
+
+<section class="how-to">
+    <p class="how-to-heading">Getting started</p>
+    <div class="steps">
+        <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-text"><strong>Download the launcher</strong> using the button above. It's a single JAR file — no installer needed.</div>
+        </div>
+        <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-text"><strong>Run the launcher</strong> with <code>java -jar orbrunner-launcher.jar</code>, or double-click if your system has Java associated with .jar files.</div>
+        </div>
+        <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-text"><strong>Click Install</strong> in the launcher. It downloads the latest game build, keeps it updated, and launches it.</div>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <span>OrbRunner &mdash; pugnetgames</span>
+    <span>
+        {% if latest_version %}{{ latest_version }}{% endif %}
+    </span>
+</footer>
+
+<script>
+    function handleDownload(e) {
+        // Let the browser follow the link naturally, then show the fallback message
+        setTimeout(function() {
+            var msg = document.getElementById('redirectMsg');
+            if (msg) msg.classList.add('visible');
+        }, 1500);
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,89 @@
+name: Require Changelog
+
+# Only runs on pull requests — pushes to main by the owner are exempt.
+on:
+  pull_request:
+    branches: ["main", "master"]
+
+jobs:
+  check-changelog:
+    name: Changelog entry required
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Fetch enough history to diff against the base branch
+          fetch-depth: 0
+
+      - name: Check for source code changes
+        id: source-check
+        run: |
+          BASE=${{ github.event.pull_request.base.sha }}
+          HEAD=${{ github.event.pull_request.head.sha }}
+
+          # Files changed in this PR
+          CHANGED=$(git diff --name-only "$BASE" "$HEAD")
+          echo "Changed files:"
+          echo "$CHANGED"
+
+          # Does this PR touch any source code?
+          SOURCE_CHANGED=$(echo "$CHANGED" | grep -E \
+            "^src/main/java/|^launcher/src/main/java/|^server/app\.py|^server/templates/" \
+            || true)
+
+          # Does this PR add or modify a changelog file?
+          CHANGELOG_CHANGED=$(echo "$CHANGED" | grep -E \
+            "^src/main/resources/update_logs/v[0-9]+\.[0-9]+\.md$" \
+            || true)
+
+          echo "source_changed=$( [ -n "$SOURCE_CHANGED" ] && echo true || echo false )" >> $GITHUB_OUTPUT
+          echo "changelog_changed=$( [ -n "$CHANGELOG_CHANGED" ] && echo true || echo false )" >> $GITHUB_OUTPUT
+
+          if [ -n "$SOURCE_CHANGED" ]; then
+            echo ""
+            echo "Source code changes detected:"
+            echo "$SOURCE_CHANGED"
+          fi
+
+          if [ -n "$CHANGELOG_CHANGED" ]; then
+            echo ""
+            echo "Changelog entry found:"
+            echo "$CHANGELOG_CHANGED"
+          fi
+
+      - name: Fail if changelog is missing
+        if: steps.source-check.outputs.source_changed == 'true' && steps.source-check.outputs.changelog_changed == 'false'
+        run: |
+          echo ""
+          echo "╔══════════════════════════════════════════════════════════════╗"
+          echo "║              MISSING CHANGELOG ENTRY                        ║"
+          echo "╠══════════════════════════════════════════════════════════════╣"
+          echo "║                                                              ║"
+          echo "║  This PR changes source code but has no changelog entry.    ║"
+          echo "║                                                              ║"
+          echo "║  Please add a file at:                                       ║"
+          echo "║    src/main/resources/update_logs/vX.X.md                   ║"
+          echo "║                                                              ║"
+          echo "║  Format:                                                     ║"
+          echo "║    # vX.X - Short Description                                ║"
+          echo "║    ## Release Date: Month Day, Year                          ║"
+          echo "║                                                              ║"
+          echo "║    ### What's New                                            ║"
+          echo "║    - Describe what you added                                 ║"
+          echo "║                                                              ║"
+          echo "║    ### Fixes                                                 ║"
+          echo "║    - Describe what you fixed                                 ║"
+          echo "║                                                              ║"
+          echo "║  Also add the filename to:                                   ║"
+          echo "║    src/main/resources/update_logs/index.txt                  ║"
+          echo "║                                                              ║"
+          echo "╚══════════════════════════════════════════════════════════════╝"
+          exit 1
+
+      - name: Changelog present — all good
+        if: steps.source-check.outputs.source_changed == 'true' && steps.source-check.outputs.changelog_changed == 'true'
+        run: echo "Changelog entry found. Good to go."
+
+      - name: No source changes — changelog not required
+        if: steps.source-check.outputs.source_changed == 'false'
+        run: echo "No source code changes detected. Changelog not required."

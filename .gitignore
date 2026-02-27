@@ -41,8 +41,9 @@ bin/
 ### Mac OS ###
 .DS_Store
 
-### AI Agent Workflows ###
+### AI Agent / Claude Code ###
 .agent/
+.claude/
 
 ### Fonts and Useless Stuff ###
 *.ttf

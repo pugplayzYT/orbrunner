@@ -156,9 +156,60 @@ invertY=false
 
 ## Update Logs
 
-Changelogs live in `src/main/resources/update_logs/` and are displayed both in the in-game changelog panel and the launcher's "Patch Notes" viewer.
+Changelogs live in `src/main/resources/update_logs/` and are displayed in both the in-game changelog panel and the launcher's "Patch Notes" viewer. Each file is plain markdown named after its version (e.g. `v3.2.md`).
 
-See `.agent/workflows/add-update-log.md` for the full workflow on adding a new version entry.
+---
+
+## Contributing
+
+Contributions are welcome via pull request. Please read the license before contributing — forks that create competing/independent projects are not permitted, but PRs to this repository are.
+
+### Rules
+
+1. **Every PR that changes source code must include a changelog entry.** The CI will block your PR if you forget. Pure docs, CI, or test-only changes are exempt.
+2. Keep changes focused — one feature or fix per PR.
+3. Match the existing code style.
+
+### How to write a changelog entry
+
+**1. Create the file** at `src/main/resources/update_logs/vX.X.md`:
+
+```markdown
+# vX.X - Short Description
+## Release Date: Month Day, Year
+
+One sentence describing the overall change.
+
+### What's New
+- Feature or addition
+
+### Fixes
+- Bug that was fixed
+
+### Technical
+- Internal change worth noting (optional)
+```
+
+Use the version numbering convention:
+- `+0.1` — bug fixes, small tweaks
+- `+0.25` — new features, significant changes
+- `+1.0` — major new systems
+
+**2. Register it** by adding the filename on a new line at the bottom of `src/main/resources/update_logs/index.txt`:
+
+```
+v3.1.md
+v3.2.md   ← add new entries here
+```
+
+The in-game update log and the launcher's Patch Notes viewer both read from this index file, newest-last (they reverse the order on display).
+
+### PR checklist
+
+- [ ] Source code changes have a corresponding `vX.X.md` in `update_logs/`
+- [ ] `index.txt` updated with the new filename
+- [ ] `./gradlew jar` and `./gradlew :launcher:jar` build cleanly
+- [ ] Server tests pass: `pytest server/tests/ -v`
 
 ---
 

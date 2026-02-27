@@ -40,7 +40,9 @@ bin/
 
 ### AI Agent / Claude Code ###
 .agent/
+.agents/
 .claude/
+CLAUDE.md
 
 ### Fonts and Useless Stuff ###
 *.ttf

@@ -6,17 +6,19 @@
 > This repository is **source-available**, not open source.
 >
 > **You may:**
-> - Clone and build the project for personal, non-commercial use
+> - Clone, build, and play the game for personal, non-commercial use
+> - Modify the source code and recompile it for your own personal use — adding mechanics, tweaking values, experimenting
 > - Run your own private distribution server (e.g. for a local network)
 > - Fork the repository to develop and submit pull requests
 > - Study and learn from the code
 >
 > **You may not:**
-> - Redistribute this game — modified or unmodified — in any form (uploading elsewhere, repackaging, sharing builds publicly)
+> - Distribute any build of this game — official or modified — in any form (uploading elsewhere, repackaging, sharing compiled JARs publicly)
+> - Publish or share modifications as a "mod" or fork release for others to download and play
 > - Use any part of this codebase in a commercial product without explicit written permission
-> - Publish a fork as a standalone project or release
 >
-> Forks exist for the purpose of contributing back via pull requests. A fork is not a licence to distribute.
+> **How official features work:**
+> The official game only ever contains features that have been reviewed and merged by the maintainer. If you want a feature in the official version, open a pull request — it will be evaluated on its merits. Modifying your local copy is fine; distributing that modified copy is not.
 >
 > © [pugplayzYT](https://github.com/pugplayzYT). All rights reserved.
 

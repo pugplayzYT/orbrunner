@@ -1,0 +1,46 @@
+name: Auto-close external PRs
+
+# pull_request_target runs in the base repo context so it has
+# write permissions even when the PR comes from a fork.
+on:
+  pull_request_target:
+    types: [opened]
+
+jobs:
+  close-external-pr:
+    name: Close PR if not from pugplayzYT
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login != 'pugplayzYT'
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Close PR and leave a comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              body: `Hey @${pr.user.login}, thanks for the interest in OrbRunner! 🎮
+
+OrbRunner is a solo-developed project and pull requests are only accepted from the core development team, so I'm going to close this one.
+
+**That said, your ideas and feedback are genuinely welcome!**
+If you spotted a bug or have a feature idea, please open an Issue instead — there are templates ready to go:
+
+- 🐛 [Report a bug](../../issues/new?template=bug_report.yml)
+- 💡 [Suggest a feature](../../issues/new?template=feature_suggestion.yml)
+
+Thanks for playing! — pugplayzYT`
+            });
+
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              state: 'closed'
+            });

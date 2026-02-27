@@ -1,0 +1,49 @@
+name: Feature Suggestion
+description: Got an idea for something to add to OrbRunner?
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea? Awesome — share it here. This is the best way to suggest features since pull requests from outside the development team are not accepted.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What do you want to see added?
+      description: Describe your idea clearly and concisely.
+      placeholder: "Example: A sprint mechanic that lets you move faster for a short time."
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would this improve the game?
+      description: What problem does it solve, or what does it make more fun?
+      placeholder: "Sprinting would make escaping enemies feel more intense and give players a skill-based option."
+    validations:
+      required: true
+
+  - type: textarea
+    id: detail
+    attributes:
+      label: Any extra detail or examples?
+      description: Mockups, references to other games, specific numbers — anything that helps paint the picture.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: What area of the game does this relate to?
+      options:
+        - Gameplay / mechanics
+        - Visuals / graphics
+        - UI / menus
+        - Audio / sound
+        - Launcher
+        - Performance
+        - Other
+    validations:
+      required: true

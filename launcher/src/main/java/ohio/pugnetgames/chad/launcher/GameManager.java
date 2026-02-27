@@ -240,6 +240,20 @@ public class GameManager {
         return serverHash.equals(localHash);
     }
 
+    // ─── Uninstall ───
+
+    /**
+     * Delete the locally cached JAR for the given version.
+     * Clears selectedVersion from config if it matches.
+     */
+    public void uninstallVersion(String version) throws IOException {
+        Files.deleteIfExists(jarPath(version));
+        if (version.equals(config.selectedVersion)) {
+            config.selectedVersion = null;
+            saveConfig();
+        }
+    }
+
     // ─── Changelog ───
 
     /**

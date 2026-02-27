@@ -313,6 +313,30 @@
     -fx-text-fill: #2a3347;
 }
 
+/* ── Uninstall Button ── */
+.uninstall-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #4a5568;
+    -fx-font-family: "Segoe UI";
+    -fx-font-size: 12px;
+    -fx-cursor: hand;
+    -fx-border-color: #2a3347;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 4 12 4 12;
+}
+
+.uninstall-button:hover {
+    -fx-text-fill: #c92a2a;
+    -fx-border-color: #c92a2a;
+}
+
+.uninstall-button:disabled {
+    -fx-text-fill: #1e2533;
+    -fx-border-color: #1a2030;
+    -fx-cursor: default;
+}
+
 /* ── Changelog Button ── */
 .changelog-button {
     -fx-background-color: transparent;

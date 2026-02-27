@@ -27,6 +27,9 @@ public class LauncherUI {
     private Label versionInfoLabel;
     private ComboBox<String> versionCombo;
 
+    // Bottom bar
+    private Button uninstallBtn;
+
     // Progress overlay
     private VBox progressOverlay;
     private ProgressBar progressBar;
@@ -160,6 +163,11 @@ public class LauncherUI {
         refreshBtn.getStyleClass().add("refresh-button");
         refreshBtn.setOnAction(e -> refreshState());
 
+        uninstallBtn = new Button("Uninstall");
+        uninstallBtn.getStyleClass().add("uninstall-button");
+        uninstallBtn.setDisable(true);
+        uninstallBtn.setOnAction(e -> onUninstallClicked());
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
@@ -181,7 +189,7 @@ public class LauncherUI {
         settingsBtn.getStyleClass().add("settings-gear-button");
         settingsBtn.setOnAction(e -> showSettings());
 
-        bar.getChildren().addAll(versionLabel, versionCombo, refreshBtn, spacer, serverLabel, serverText, changelogBtn, settingsBtn);
+        bar.getChildren().addAll(versionLabel, versionCombo, refreshBtn, uninstallBtn, spacer, serverLabel, serverText, changelogBtn, settingsBtn);
         return bar;
     }
 
@@ -563,6 +571,7 @@ public class LauncherUI {
                 }
 
                 actionButton.setDisable(false);
+                updateUninstallButton();
             });
         }).start();
     }
@@ -679,6 +688,7 @@ public class LauncherUI {
         if (selected == null) return;
 
         gameManager.setSelectedVersion(selected);
+        updateUninstallButton();
 
         if (!gameManager.isInstalled(selected)) {
             actionButton.setText("DOWNLOAD");
@@ -705,6 +715,34 @@ public class LauncherUI {
                 actionButton.setDisable(false);
             });
         }).start();
+    }
+
+    private void updateUninstallButton() {
+        String selected = versionCombo.getValue();
+        uninstallBtn.setDisable(selected == null || !gameManager.isInstalled(selected));
+    }
+
+    private void onUninstallClicked() {
+        String selected = versionCombo.getValue();
+        if (selected == null || !gameManager.isInstalled(selected)) return;
+
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Uninstall Version");
+        confirm.setHeaderText("Remove " + selected + "?");
+        confirm.setContentText("This will delete the local copy of " + selected + " from your machine.");
+        confirm.initOwner(stage);
+
+        confirm.showAndWait().ifPresent(result -> {
+            if (result == ButtonType.OK) {
+                try {
+                    gameManager.uninstallVersion(selected);
+                    statusLabel.setText(selected + " uninstalled.");
+                    refreshState();
+                } catch (IOException e) {
+                    statusLabel.setText("Failed to uninstall: " + e.getMessage());
+                }
+            }
+        });
     }
 
     // ──────────────────────────────────────────────

@@ -1405,46 +1405,6 @@ public class InGameUI {
         void onValueChanged(float value);
     }
 
-    private float renderSlider(float x, float y, float w, String label,
-            float value, float colR, float colG, float colB,
-            SliderCallback callback) {
-        float sliderH = 20;
-        float labelW = 40; // width for single-char labels like R, G, B
-        float sliderX = x + labelW;
-        float sliderW = w - labelW;
-
-        fontRenderer.drawText(label + ":", x, y, colR, colG, colB);
-
-        // Track background
-        drawFilledRect(sliderX, y + 5, sliderW, sliderH, 0.2f, 0.2f, 0.2f, 1.0f);
-
-        // Filled portion
-        float filledW = sliderW * value;
-        drawFilledRect(sliderX, y + 5, filledW, sliderH, colR, colG, colB, 0.7f);
-
-        // Handle
-        float handleX = sliderX + filledW - 5;
-        float handleW = 10;
-        drawFilledRect(handleX, y + 2, handleW, sliderH + 6, 1.0f, 1.0f, 1.0f, 0.9f);
-
-        // Value text
-        String valText = String.format("%.0f%%", value * 100);
-        fontRenderer.drawText(valText, sliderX + sliderW + 5, y, 0.7f, 0.7f, 0.7f);
-
-        // Interaction: drag on the slider track
-        if (mousePressed) {
-            float mx = (float) mouseX;
-            float my = (float) mouseY;
-            if (mx >= sliderX && mx <= sliderX + sliderW && my >= y && my <= y + sliderH + 10) {
-                float newVal = (mx - sliderX) / sliderW;
-                newVal = Math.max(0, Math.min(1, newVal));
-                callback.onValueChanged(newVal);
-            }
-        }
-
-        return y + 40;
-    }
-
     /**
      * Slider variant for the pause menu — shows label, slider bar, and value text.
      * Label column is wider to fit labels like "Sens", "FOV", "Fog", "Vol".

@@ -58,7 +58,9 @@ src/main/resources/inter_extracted/**
 
 ### Server ###
 server/versions/
+server/launcher/
 server/__pycache__/
+server/tests/__pycache__/
 *.pyc
 
 ### Launcher ###

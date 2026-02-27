@@ -1,0 +1,54 @@
+OrbRunner Source-Available License
+Copyright (c) 2025 pugplayzYT (https://github.com/pugplayzYT)
+
+SUMMARY
+-------
+You are free to view, run, and contribute to this project.
+You may NOT fork it to create your own separate game or product.
+
+
+PERMISSIONS
+-----------
+The following are permitted without restriction:
+
+1. Viewing and studying the source code.
+2. Running the software on your own machine for personal, non-commercial use.
+3. Modifying the source code locally for personal use or for the purpose
+   of preparing a contribution to this repository.
+4. Submitting pull requests and contributions to the official repository at
+   https://github.com/pugplayzYT/orbrunner. By submitting a contribution,
+   you agree that your contribution is licensed under these same terms and
+   that the copyright holder may include it in the project.
+
+
+RESTRICTIONS
+------------
+The following are NOT permitted without prior written permission from the
+copyright holder:
+
+1. Distributing, publishing, or releasing this software or any derivative
+   work — whether modified or unmodified — as a separate project, product,
+   or service under any name.
+2. Forking this repository to develop and maintain an independent or
+   competing project (e.g. "MazeEscape 3D 2.0", "OrbRunner Reborn", etc.).
+3. Using this software or substantial portions of it in a commercial
+   product or service.
+4. Re-licensing or sublicensing this software under any other license.
+
+
+DISCLAIMER
+----------
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
+CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM THE USE OF THIS SOFTWARE.
+
+
+HOW TO CONTRIBUTE
+-----------------
+1. Fork the repository on GitHub.
+2. Make your changes on a branch.
+3. Open a pull request against the main repository.
+4. Your contribution must follow the project's coding style and guidelines.
+
+Forks created solely for the purpose of submitting a pull request back to
+the original repository are explicitly permitted.
